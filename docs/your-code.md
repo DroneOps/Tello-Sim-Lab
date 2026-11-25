@@ -62,24 +62,61 @@ at the start). See [maps.md](maps.md#coordinates).
 Each one was run unchanged, with `python -m tellosim.run`. These are first runs, not a
 verdict: use them to know where to start.
 
-**[Gate_tmr_color](https://github.com/DroneOps/Gate_tmr_color)** (`MissionControl.py`, map
-`tmr_gates`):
+**[Gate_tmr_color](https://github.com/DroneOps/Gate_tmr_color)** has two versions:
+`MissionControl.py` (distance from the gate's width in pixels) and `MissionControl_PnP.py`
+(PnP + Kalman + PID, their latest commit). We flew both against one gate and against `tmr_gates`.
+The one-gate map:
 
-```bash
-python -m tellosim.run --world tmr_gates --record gates.mp4 --seconds 75 MissionControl.py
+```yaml
+# one_gate.yaml: a 110 cm opening (what their code assumes), 5 m ahead, centered at 100 cm
+floor: {type: lab_grid}
+objects:
+  - {type: gate, position: [0, 500, 100], width_cm: 110, height_cm: 110, bar_cm: 10, color: green}
 ```
 
-- It runs as is: it finds the green frame and steers to it.
-- **Result:**
-  - one run went through the first gate on its edge and crashed into the frame;
-  - the next zigzagged and reached no gate.
-- **Why:**
-  - the sideways and vertical commands are a gain times the pixel error, up to rc 100;
-  - with ~170 ms of video delay, that overshoots from side to side.
-- **What to try:**
-  - cap the rc at ~30;
-  - lower `Kpy`;
-  - brake with the error's rate of change (a D term), or use `tellolab.TargetCentering`.
+```bash
+python -m tellosim.run --world one_gate.yaml --record gate.mp4 --seconds 65 MissionControl_PnP.py
+```
+
+| Version | One gate, 5 m ahead (2 runs) | `tmr_gates`: three gates in a row (1 run) |
+|---|---|---|
+| `MissionControl_PnP.py` | **flew through both times**, at most 27 cm off center, sideways rc never above 15 | hit the first gate's frame |
+| `MissionControl.py` | hit the bottom bar both times: it flew too low | zigzag with rc up to ±100, hit the first gate |
+
+**What we learned:**
+- **The big zigzag on `tmr_gates` comes from the map, not from the drone or its controller.**
+  - The three gates are in a row, so from the start they look overlapped and their bars
+    cross in the image, making small false rectangles.
+  - The detector takes any rectangular hole in the green mask (the last one it finds), so it
+    sometimes followed one of those.
+  - A false rectangle a few pixels wide made it believe the gate was 16–70 m away and up to
+    9 m to the side, so it sent rc ±100.
+  - With a single gate it never sent more than rc 19 sideways.
+  - If the real course has gates in a row, this can happen for real: keep the biggest hole,
+    not the last one.
+- **The camera looks 11° down and sees only ~10° above the horizon.**
+  - From the takeoff height (~70 cm), a gate centered at 100 cm fits whole only from ~5 m
+    away (a 110 cm opening) or ~4.6 m (90 cm).
+  - Closer than that, the top bar is out of view, there is no closed rectangle, and both
+    versions finish the approach blind ("sprint").
+  - On `tmr_gates` the first gate is 2.5 m away, so the real gate was never detected, only
+    the false rectangles.
+- **`MissionControl.py` flew too low.**
+  - It asked ud ~20 while going forward and sideways. The lab Tello climbs only ~5–10 cm/s
+    with rc 20 (calibration of 2026-10-24) and sinks when moving forward and sideways, so it
+    barely climbed.
+  - It lost the gate at ~4.4 m, sank to ~36 cm flying blind and hit the bottom bar.
+  - The PnP version asks up to ud 44, reaches the gate's height and keeps seeing it until
+    ~2.8 m.
+- **Two details in `Control_Gate_PnP.py`:**
+  - `derivada_z` subtracts `self.errorPrev[0]`, which is the previous *sideways* error
+    (`errorPrev` is (y, z, distance)): the vertical D term mixes in the sideways error. It
+    should be `errorPrev[1]`.
+  - The Kalman filters take `get_speed_*` as cm/s, but the Tello gives dm/s (and `vgz` is
+    positive going down), so the prediction moves 10x too little. It matters little: the
+    filter mostly follows the camera.
+- **`scale_signal` turns any command into at least ±15.** Near the center it wobbles at ±15
+  instead of stopping: a small side-to-side wobble, on the real drone too.
 
 **[TMR_Landing](https://github.com/DroneOps/TMR_Landing)** (`tests/test_tracking.py`, map
 `tmr_landing`): it takes off with `t` and lands with `l`.
