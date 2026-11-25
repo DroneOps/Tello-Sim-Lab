@@ -30,8 +30,8 @@ python -m tellosim.run --world tmr_gates my_program.py
 |---|---|
 | `--world`, `--model`, `--camera`, `--camera-mode`, `--seed` | the map, the drone, the camera ([maps.md](maps.md), [drone-model.md](drone-model.md), [camera.md](camera.md)) |
 | `--camera-set KEY=VALUE` | any camera field, e.g. `--camera-set mirror_axis=h --camera-set mirror_tilt_deg=-5`; repeat it |
-| `--faults JSON` | e.g. `--faults '{"takeoff": "collapse"}'` ([faults.md](faults.md)) |
-| `--fog N` or `--fog JSON` | fog with N cm of visibility, or smoke: `--fog '{"visibility_cm": 300, "patches": 0.5}'` ([maps.md](maps.md#fog-and-smoke)) |
+| `--faults JSON` | e.g. `--faults '{"takeoff": "collapse"}'`, or a file: `--faults faults.json` ([faults.md](faults.md)) |
+| `--fog N`, `--fog JSON` or `--fog fog.json` | fog with N cm of visibility, or smoke: `--fog '{"visibility_cm": 300, "patches": 0.5}'` ([maps.md](maps.md#fog-and-smoke)). On Windows, a file avoids the quotes |
 | `--viewer` | also show the map from above |
 | `--record run.mp4` | record the map and the camera, side by side |
 | `--headless` | no windows: `cv2.imshow` does nothing, `cv2.waitKey` returns -1 |

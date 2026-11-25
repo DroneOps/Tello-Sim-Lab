@@ -32,3 +32,13 @@ def test_run_unmodified_program(tmp_path):
     assert "FRAME (720, 960, 3) SIM tellosim.tello ARGS ['--mine', '1']" in out
     assert "KEY t" in out
     assert "crash: none" in out
+
+
+def test_run_options_from_a_json_file(tmp_path):
+    """--fog and --faults also take a .json file (quotes in commands are hard on Windows)."""
+    (tmp_path / "fog.json").write_text('{"visibility_cm": 300, "patches": 0.5}')
+    prog = tmp_path / "prog.py"
+    prog.write_text("from djitellopy import Tello\nt = Tello()\nprint('FOG', t.sim.world.fog.visibility_cm, t.sim.world.fog.patches)\n")
+    out = subprocess.run([sys.executable, "-m", "tellosim.run", "--headless", "--fog", str(tmp_path / "fog.json"), str(prog)],
+                         capture_output=True, text=True, timeout=60).stdout
+    assert "FOG 300 0.5" in out

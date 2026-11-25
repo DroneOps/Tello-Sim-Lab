@@ -14,16 +14,115 @@ for any Tello project.
 
 ![viewer](docs/img/viewer.jpg)
 
-## Install
+## Getting started on your computer
+
+Everything below works the same for any Tello project. Your own code does not change.
+
+### 1. Check your Python
+
+```bash
+python --version
+```
+
+You need **3.10 or newer**. On Windows use `py --version`; on Linux and Mac, `python3 --version`
+if `python` is not found.
+
+### 2. Get the simulator
 
 ```bash
 git clone https://github.com/DroneOps/Tello-Sim-Lab.git
-cd Tello-Sim-Lab
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev,real]"
 ```
 
-`real` installs djitellopy (for the real drone); `dev` installs pytest.
+- **Without git:** on GitHub, *Code → Download ZIP*, and unzip it.
+- **Where:** keep it next to your project, e.g. `Documents/Tello-Sim-Lab` and
+  `Documents/My_Project`. The commands below assume that.
+
+### 3. Install it where your project runs
+
+**If your project already has an environment** (a venv or a conda env), install the simulator
+into that same one, so your libraries and the simulator live together:
+1. Activate it as you always do (`source .venv/bin/activate`, `conda activate my_env`...).
+2. Install:
+   ```bash
+   pip install -e ../Tello-Sim-Lab
+   ```
+   That is the path to the folder of step 2. `-e` installs it from that folder, so a `git pull`
+   there updates it without reinstalling.
+
+**If not,** create one inside `Tello-Sim-Lab`, then install your project's libraries in it too
+(e.g. `pip install -r requirements.txt` from your project):
+
+| | Linux / Mac | Windows (PowerShell) |
+|---|---|---|
+| create | `python3 -m venv .venv` | `py -m venv .venv` |
+| activate | `source .venv/bin/activate` | `.venv\Scripts\Activate.ps1` (cmd: `.venv\Scripts\activate.bat`) |
+| install | `pip install -e ".[dev,real]"` | `pip install -e ".[dev,real]"` |
+
+`real` adds djitellopy (to fly the real drone), `dev` adds pytest.
+
+Check that it works, with the environment active:
+
+```bash
+python -c "import tellosim; print(tellosim.builtin_maps())"
+```
+
+It prints the maps (`lab_grid`, `tmr_gates`, `tmr_landing`...).
+
+### 4. Run your program
+
+Go to your project's **root folder**, where its own files and folders are, so it finds them:
+
+```bash
+cd ../My_Project
+```
+```bash
+python -m tellosim.run --world tmr_landing --viewer main.py
+```
+
+- **`--world`:** the map, e.g. `tmr_gates`, `tmr_landing`, `line_follower`, or your own `.yaml`
+  ([docs/maps.md](docs/maps.md)).
+- **`--viewer`:** a second window with the map from above.
+- **After your program's name:** its own arguments, e.g. `main.py --solo-seguimiento`.
+- **Keys:** if your program waits for a key (e.g. `t` to take off), click its window and press
+  it, or let the simulator press it: `--keys t@6` presses `t` 6 s after the start.
+- **Every option** (`--record`, `--fog`, `--model`, `--seed`...):
+  [docs/your-code.md](docs/your-code.md).
+
+### 5. Read the result and clean up
+
+At the end it prints what really happened, which the real drone never tells you:
+
+```text
+[tellosim.run] flight time 57 s, battery 84%, crash: none
+[tellosim.run] gate gate1: flown through
+[tellosim.run] landing pad pad: touched down 64 cm from its center (off it), at 61 s
+```
+
+If your program saves its own logs or videos, the ones from this run come from the simulator:
+rename or delete them so they do not get mixed with real flights.
+
+### 6. Update
+
+`git pull` in the `Tello-Sim-Lab` folder (with the ZIP: download it again and unzip it over the
+old one). Nothing to reinstall.
+
+### Different computers and projects
+
+| Case | What to do |
+|---|---|
+| **Windows** | If PowerShell refuses to run `Activate.ps1`: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once. Quotes inside a command break easily, so use `--fog 300` or put the options in a file: `--fog fog.json`, `--faults faults.json` |
+| **Mac** | The viewer opens its window from a second thread, and OpenCV on a Mac only allows windows on the main thread, so `--viewer` will probably fail. Use `--record run.mp4` and watch the video. Not tested on a Mac yet: if you try it, open an issue with what happened |
+| **Linux** | Tested here. On a minimal install OpenCV may ask for `sudo apt install libgl1` |
+| **No screen** (a server, WSL without windows) | `--headless --record run.mp4` |
+| **Your environment has `opencv-contrib-python`** (or `opencv-python-headless`) | pip would add `opencv-python` too, and two OpenCVs in one environment break `cv2`. Install with `pip install -e ../Tello-Sim-Lab --no-deps`, then `pip install numpy pyyaml` |
+| **Python 3.9 or older** | It does not install. Install a newer Python and make a new environment |
+| **Your program is in a subfolder** (e.g. `tests/my_test.py`) | Run it from the project's root folder: `python -m tellosim.run --world tmr_landing tests/my_test.py` |
+| **Your program reads the keyboard with pygame, `keyboard` or Qt** | `--keys` only works with `cv2.waitKey` / `cv2.pollKey`: someone has to press the keys |
+| **Your program uses its own GUI** (PySide, Tkinter...) | Install those libraries in the same environment; the simulator does not replace them |
+| **Your mirror flips the image sideways** | `--camera-set mirror_axis=h` ([docs/camera.md](docs/camera.md)) |
+| **You calibrated your own Tello's camera** | `--camera my_calibration.json` ([docs/camera.md](docs/camera.md)) |
+| **A slow computer** | A frame takes ~17 ms on our laptop (~23 with fog). On a slower one the video comes at fewer frames per second than the real ~30; your program still runs. To run many flights, use simulated time ([docs/extending.md](docs/extending.md)) |
+| **`AttributeError` with a Tello method's name** | A djitellopy call the simulator does not have yet: open an issue with its name |
 
 ## Your code, in the simulator
 

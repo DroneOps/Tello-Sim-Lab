@@ -12,8 +12,8 @@ a line.
 Options:
   --world, --model, --camera, --camera-mode, --seed   simulation settings (see docs/how-it-works.md)
   --camera-set mirror_axis=h                          any camera field (docs/camera.md); repeat it
-  --faults '{"takeoff": "no_ok"}'                     faults as JSON (docs/faults.md)
-  --fog 300  or  --fog '{"visibility_cm": 300, "patches": 0.6}'   fog or smoke (docs/maps.md)
+  --faults '{"takeoff": "no_ok"}'                     faults as JSON, or a .json file (docs/faults.md)
+  --fog 300  or  --fog '{"visibility_cm": 300, "patches": 0.6}'   fog or smoke, or a .json file (docs/maps.md)
   --headless       no windows: cv2.imshow does nothing and cv2.waitKey returns -1 (no keys)
   --viewer         also show the map from above
   --record FILE    record the map + camera view to an mp4
@@ -101,6 +101,15 @@ def _press_keys(keys: list[tuple[str, float]]) -> None:
     cv2.waitKey, cv2.pollKey = wait_key, poll_key
 
 
+def _json_arg(text: str):
+    """--fog / --faults: JSON text, a number, or the path of a .json file (handy on Windows, where
+    quotes inside a command are hard to get right)."""
+    if os.path.isfile(text):
+        with open(text, encoding="utf-8") as f:
+            return json.load(f)
+    return json.loads(text)
+
+
 def _value(text: str):
     try:
         return json.loads(text)
@@ -134,9 +143,9 @@ def main() -> None:
         key, _, value = kv.partition("=")
         options[key.strip()] = _value(value.strip())
     if a.faults:
-        options["faults"] = json.loads(a.faults)
+        options["faults"] = _json_arg(a.faults)
     if a.fog:
-        options["fog"] = json.loads(a.fog)
+        options["fog"] = _json_arg(a.fog)
     _install_fake_djitellopy(options, a.viewer, a.record)
     if a.headless:
         _headless()
