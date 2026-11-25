@@ -11,6 +11,7 @@ the real drone (djitellopy) and the simulator (tellosim). See docs/controllers.m
 - SafeFlip: climb, flip, and recover from the post-flip fall
 - SafetyMonitor: when to refuse a takeoff and when to land
 - Pilot: all of the above in a 20 Hz loop; StopWindow: video + STOP button
+- FlightLog: a CSV of each flight (rc sent + state), for tools/fit_model.py
 """
 
 from .altitude import (AltitudeFilter, AltitudeFilterConfig, AltitudeHold, AltitudeHoldConfig, GoToAltitude,
@@ -18,6 +19,7 @@ from .altitude import (AltitudeFilter, AltitudeFilterConfig, AltitudeHold, Altit
 from .flip import SafeFlip, SafeFlipConfig
 from .floor_flow import FloorFlow, point_below_drone
 from .heading import HeadingConfig, HeadingHold
+from .log import FlightLog
 from .pilot import Pilot, PilotConfig
 from .position import PositionHold, PositionHoldConfig
 from .safety import SafetyConfig, SafetyMonitor

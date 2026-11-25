@@ -45,10 +45,11 @@ class PilotConfig:
 
 class Pilot:
     def __init__(self, tello, cfg: PilotConfig | None = None, frame_read=None, position=None,
-                 threaded: bool = True, clock=time.monotonic) -> None:
+                 threaded: bool = True, clock=time.monotonic, log_path=None) -> None:
         """position: optional callable returning ((right, forward), (v_right, v_forward)) of the
         drone relative to where it should hover, in cm and cm/s, or None if unknown right now.
-        threaded=False: call ``tick()`` yourself (tests in simulated time)."""
+        threaded=False: call ``tick()`` yourself (tests in simulated time).
+        log_path: write a FlightLog CSV of every control step (for tools/fit_model.py)."""
         self.t = tello
         self.cfg = cfg or PilotConfig()
         self.tel = Telemetry(tello, clock)
@@ -71,6 +72,10 @@ class Pilot:
         self._stop = threading.Event()
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
+        self.log = None
+        if log_path:
+            from .log import FlightLog
+            self.log = FlightLog(tello, log_path, clock=clock)
 
     # ------------------------------------------------------------------ commands
     def takeoff(self, altitude_cm: float | None = None) -> None:
@@ -128,6 +133,9 @@ class Pilot:
         self.reason = self.reason or reason or None
         self.t.send_rc_control(0, 0, 0, 0)
         self.t.land()
+        if self.log:
+            self.log.close()
+            self.log = None
 
     def kill(self) -> None:
         """Motors off: the drone FALLS. Only if it is heading at a person."""
@@ -207,3 +215,5 @@ class Pilot:
         lim = self.cfg.rc_limit
         self.sent = tuple(int(max(-lim, min(lim, v))) for v in (lr, fb, ud, yaw))
         self.t.send_rc_control(*self.sent)
+        if self.log:
+            self.log.write(self.sent)

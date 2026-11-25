@@ -101,6 +101,7 @@ class Sim:
         self._readers: list[BackgroundFrameRead] = []
         self.video_on = False
         self._reported_crash = False
+        self._viewers: list = []
         if realtime:
             self._start(self._physics_loop)
 
@@ -135,7 +136,21 @@ class Sim:
         bgr_img = self.renderer.render(x, y, z, yaw)
         return bgr_img[..., ::-1].copy()  # djitellopy gives RGB
 
+    def world_changed(self) -> None:
+        """Call after adding, removing or moving objects while the simulation runs."""
+        self.world._texture = None
+        self.renderer.invalidate()
+
+    def viewer(self, show: bool = True, record: str | None = None, fps: float = 10.0):
+        """Map from above + camera, in a window and/or recorded to an mp4. See viewer.py."""
+        from .viewer import Viewer
+        v = Viewer(self, show=show, record=record, fps=fps)
+        self._viewers.append(v)
+        return v.start()
+
     def close(self) -> None:
+        for v in getattr(self, "_viewers", []):
+            v.stop()
         self._stop.set()
         for t in self._threads:
             t.join(timeout=1.0)
