@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tello-sim-lab"
+version = "0.1.0"
+description = "A DJI Tello simulator tuned to real lab flights, and reusable stabilization controllers for the Tello."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "opencv-python>=4.8",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+real = ["djitellopy>=2.5"]
+dev = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+include = ["tellosim*", "tellolab*"]
+
+[tool.setuptools.package-data]
+tellosim = ["maps/*.yaml", "models/*.json", "cameras/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
