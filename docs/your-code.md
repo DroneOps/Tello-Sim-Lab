@@ -73,7 +73,7 @@ python -m tellosim.run --world tmr_gates --record gates.mp4 --seconds 110 Missio
 
 | Version | `tmr_gates` |
 |---|---|
-| `MissionControl_PnP.py` (2 runs) | one run went through **all three**. The other went through the first, drifted ~45 cm to the side flying blind to the second, and hit its post |
+| `MissionControl_PnP.py` (3 runs) | two runs went through **all three**. The other went through the first, drifted ~45 cm to the side flying blind to the second, and hit its post |
 | `MissionControl.py` (1 run) | went through the first, but flew low (~50 cm) and slowly: it did not reach the second in 110 s |
 
 Neither zigzagged: the sideways rc stayed at ±15 (once 26).
