@@ -64,50 +64,46 @@ verdict: use them to know where to start.
 
 **[Gate_tmr_color](https://github.com/DroneOps/Gate_tmr_color)** has two versions:
 `MissionControl.py` (distance from the gate's width in pixels) and `MissionControl_PnP.py`
-(PnP + Kalman + PID, their latest commit). We flew both against one gate and against `tmr_gates`.
-The one-gate map:
-
-```yaml
-# one_gate.yaml: a 110 cm opening (what their code assumes), 5 m ahead, centered at 100 cm
-floor: {type: lab_grid}
-objects:
-  - {type: gate, position: [0, 500, 100], width_cm: 110, height_cm: 110, bar_cm: 10, color: green}
-```
+(PnP + Kalman + PID, their latest commit). We flew both on `tmr_gates`: three 110 cm gates,
+5 m apart, the first 5 m from the start, centered at 90–95 cm and up to 10 cm off the line.
 
 ```bash
-python -m tellosim.run --world one_gate.yaml --record gate.mp4 --seconds 65 MissionControl_PnP.py
+python -m tellosim.run --world tmr_gates --record gates.mp4 --seconds 110 MissionControl_PnP.py
 ```
 
-| Version | One gate, 5 m ahead (2 runs) | `tmr_gates`: three gates in a row (1 run) |
-|---|---|---|
-| `MissionControl_PnP.py` | **flew through both times**, at most 27 cm off center, sideways rc never above 15 | hit the first gate's frame |
-| `MissionControl.py` | hit the bottom bar both times: it flew too low | zigzag with rc up to ±100, hit the first gate |
+| Version | `tmr_gates` |
+|---|---|
+| `MissionControl_PnP.py` (2 runs) | one run went through **all three**. The other went through the first, drifted ~45 cm to the side flying blind to the second, and hit its post |
+| `MissionControl.py` (1 run) | went through the first, but flew low (~50 cm) and slowly: it did not reach the second in 110 s |
+
+Neither zigzagged: the sideways rc stayed at ±15 (once 26).
 
 **What we learned:**
-- **The big zigzag on `tmr_gates` comes from the map, not from the drone or its controller.**
-  - The three gates are in a row, so from the start they look overlapped and their bars
-    cross in the image, making small false rectangles.
-  - The detector takes any rectangular hole in the green mask (the last one it finds), so it
-    sometimes followed one of those.
-  - A false rectangle a few pixels wide made it believe the gate was 16–70 m away and up to
-    9 m to the side, so it sent rc ±100.
-  - With a single gate it never sent more than rc 19 sideways.
-  - If the real course has gates in a row, this can happen for real: keep the biggest hole,
-    not the last one.
 - **The camera looks 11° down and sees only ~10° above the horizon.**
-  - From the takeoff height (~70 cm), a gate centered at 100 cm fits whole only from ~5 m
-    away (a 110 cm opening) or ~4.6 m (90 cm).
-  - Closer than that, the top bar is out of view, there is no closed rectangle, and both
-    versions finish the approach blind ("sprint").
-  - On `tmr_gates` the first gate is 2.5 m away, so the real gate was never detected, only
-    the false rectangles.
-- **`MissionControl.py` flew too low.**
-  - It asked ud ~20 while going forward and sideways. The lab Tello climbs only ~5–10 cm/s
+  - From the takeoff height (~70 cm), a gate centered at ~90 cm fits whole only from ~5 m
+    away.
+  - Closer than that, the top bar is out of view and there is no closed rectangle, so both
+    versions finish each approach blind ("sprint": lr = 0, ud = 0).
+  - In those last ~4 m nothing corrects the drift or the sinking. That is what made the
+    second PnP run hit the post.
+- **Several gates in view can hide the nearest one.**
+  - The next gates are seen inside the nearest one.
+  - If their frames touch in the image, the nearest gate's hole stops being a rectangle and
+    neither version finds it.
+  - With the next gate 30 cm off the line, or a gate 15 cm higher than the one in front, the
+    PnP version did not see the second gate from 5 m (it did from 4 m). That is why this map
+    keeps them within 10 cm.
+  - The first version of this map (first gate at 2.5 m, 30 cm offsets) was worse. The
+    frames crossed and made small false rectangles, and `MissionControl.py`, which takes any
+    rectangular hole (the last one it finds), followed them. It believed the gate was 16–70
+    m away and up to 9 m to the side, sent rc ±100 and zigzagged.
+  - On a real course with gates in a row this can happen too: keep the biggest hole, and
+    give the gates a stand that is not green (`leg_color` in the map).
+- **`MissionControl.py` flies too low.**
+  - It asks ud ~20–25 while going forward and sideways. The lab Tello climbs only ~5–10 cm/s
     with rc 20 (calibration of 2026-10-24) and sinks when moving forward and sideways, so it
-    barely climbed.
-  - It lost the gate at ~4.4 m, sank to ~36 cm flying blind and hit the bottom bar.
-  - The PnP version asks up to ud 44, reaches the gate's height and keeps seeing it until
-    ~2.8 m.
+    barely climbs.
+  - The PnP version asks up to ud 44 and reaches the gate's height.
 - **Two details in `Control_Gate_PnP.py`:**
   - `derivada_z` subtracts `self.errorPrev[0]`, which is the previous *sideways* error
     (`errorPrev` is (y, z, distance)): the vertical D term mixes in the sideways error. It

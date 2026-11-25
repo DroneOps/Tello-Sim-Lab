@@ -10,7 +10,7 @@ A map is a floor plus objects. Built-in maps are in `tellosim/maps/`:
 | `color_gates` | orange square gate, green ring, blue square gate | forward |
 | `landing_pad` | an "H" pad and a raised platform with an ArUco marker | mirror |
 | `aruco_board` | four ArUco markers on a wall, and a box | forward |
-| `tmr_gates` | three green 90 cm gates in a row (like DroneOps/Gate_tmr_color) | forward |
+| `tmr_gates` | three green 110 cm gates 5 m apart, the first 5 m ahead (like DroneOps/Gate_tmr_color) | forward |
 | `tmr_landing` | a pad with a 10 cm 6x6 ArUco, 20 cm behind the start (like DroneOps/TMR_Landing) | mirror |
 
 ```python
@@ -102,7 +102,7 @@ floor.png`, `size_cm: [width, depth]` and `center`.
 - `width_cm`, `height_cm` (80): the opening; for a circle, `width_cm` is the inner diameter.
 - `bar_cm` (8), `facing_deg` (the direction you fly through it), `color` (orange).
 - `shape`: `rect` or `circle`.
-- `legs` (true): posts to the floor, rect only.
+- `legs` (true): posts to the floor, rect only; `leg_color` (the frame's color): e.g. `gray` stands, so a color mask sees only the frame.
 
 Hitting the frame or the legs is a crash.
 

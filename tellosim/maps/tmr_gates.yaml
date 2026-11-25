@@ -1,13 +1,15 @@
 name: tmr_gates
 description: >
   Three green square gates in a row, like the Torneo Mexicano de Robotica gate challenge
-  (DroneOps/Gate_tmr_color): 110 cm outer width (90 cm opening, 10 cm frame), centers at
-  100-115 cm high, 2.5 m apart, slightly off the line. Forward camera. A hard test: from the
-  start the three look overlapped, and from the takeoff height the first gate's top bar is out
-  of view (see docs/your-code.md).
-floor: {type: lab_grid}
+  (DroneOps/Gate_tmr_color): 110 cm opening (what Gate_tmr_color assumes), 10 cm frame, gray
+  stands, centers at 90-95 cm high, 5 m apart, the first 5 m from the start, up to 10 cm off the
+  line. Forward camera. An approximation, not measured on a real TMR course: adjust it to yours.
+  From the takeoff height (~70 cm) a gate fits whole in the image only from ~5 m away, and the
+  next gates are seen inside the nearest one: if their frames touch in the image, a detector
+  that looks for one closed rectangle loses it (see docs/your-code.md).
+floor: {type: lab_grid, size_cm: [800, 2000], center: [0, 800]}
 start: {position: [0, 0], yaw_deg: 0}
 objects:
-  - {type: gate, name: gate1, position: [0, 250, 100], width_cm: 90, height_cm: 90, bar_cm: 10, color: green}
-  - {type: gate, name: gate2, position: [30, 500, 115], width_cm: 90, height_cm: 90, bar_cm: 10, color: green}
-  - {type: gate, name: gate3, position: [-20, 750, 105], width_cm: 90, height_cm: 90, bar_cm: 10, color: green}
+  - {type: gate, name: gate1, position: [0, 500, 90], width_cm: 110, height_cm: 110, bar_cm: 10, color: green, leg_color: gray}
+  - {type: gate, name: gate2, position: [10, 1000, 95], width_cm: 110, height_cm: 110, bar_cm: 10, color: green, leg_color: gray}
+  - {type: gate, name: gate3, position: [-10, 1500, 90], width_cm: 110, height_cm: 110, bar_cm: 10, color: green, leg_color: gray}

@@ -213,3 +213,10 @@ def test_gate_color_visible(flying):
     hsv = cv2.cvtColor(t.sim.capture()[..., ::-1], cv2.COLOR_BGR2HSV)
     orange = cv2.inRange(hsv, (5, 120, 120), (25, 255, 255))
     assert orange.mean() / 255 > 0.01
+
+
+def test_gate_leg_color():
+    from tellosim.objects import Gate, bgr
+    polys = Gate(position=(0, 300, 100), color="green", leg_color="gray").primitives()
+    assert [q.color for q in polys[-2:]] == [bgr("gray")] * 2
+    assert polys[0].color == bgr("green")

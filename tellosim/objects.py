@@ -360,7 +360,8 @@ class Gate(SimObject):
     """A gate to fly through: a rectangular frame (``shape: rect``) or a ring (``shape: circle``).
     position: [x, y, z] of the CENTER of the opening; width_cm/height_cm: the opening (for a
     circle, width_cm is the inner diameter); bar_cm: thickness of the frame; facing_deg: the
-    direction you fly through it; legs: posts down to the floor (rect only)."""
+    direction you fly through it; legs: posts down to the floor (rect only), in leg_color (default:
+    the frame's color; another color, e.g. gray stands, keeps them out of a color mask)."""
     position: tuple = (0.0, 150.0, 100.0)
     width_cm: float = 80.0
     height_cm: float = 80.0
@@ -369,6 +370,7 @@ class Gate(SimObject):
     color: object = "orange"
     shape: str = "rect"
     legs: bool = True
+    leg_color: object = None
     segments: int = 32
 
     def _axes(self):
@@ -392,14 +394,15 @@ class Gate(SimObject):
             return quads
         w, h = self.width_cm / 2, self.height_cm / 2
 
-        def rect(x0, x1, z0, z1):
+        def rect(x0, x1, z0, z1, color=col):
             return SolidPoly(np.array([c + x0 * right + z1 * up, c + x1 * right + z1 * up,
-                                       c + x1 * right + z0 * up, c + x0 * right + z0 * up]), col)
+                                       c + x1 * right + z0 * up, c + x0 * right + z0 * up]), color)
         quads += [rect(-w - b, w + b, h, h + b), rect(-w - b, w + b, -h - b, -h),
                   rect(-w - b, -w, -h, h), rect(w, w + b, -h, h)]
         if self.legs and c[2] - h - b > 0:
             z_floor = -c[2]
-            quads += [rect(-w - b, -w, z_floor, -h - b), rect(w, w + b, z_floor, -h - b)]
+            leg = col if self.leg_color is None else bgr(self.leg_color)
+            quads += [rect(-w - b, -w, z_floor, -h - b, leg), rect(w, w + b, z_floor, -h - b, leg)]
         return quads
 
     def collides(self, p, radius):
