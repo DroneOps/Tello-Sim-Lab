@@ -1,0 +1,11 @@
+name: tmr_gates
+description: >
+  Three green square gates in a row, like the Torneo Mexicano de Robotica gate challenge
+  (DroneOps/Gate_tmr_color): 110 cm outer width (90 cm opening, 10 cm frame), centers at
+  100-115 cm high, 2.5 m apart, slightly off the line. Forward camera.
+floor: {type: lab_grid}
+start: {position: [0, 0], yaw_deg: 0}
+objects:
+  - {type: gate, name: gate1, position: [0, 250, 100], width_cm: 90, height_cm: 90, bar_cm: 10, color: green}
+  - {type: gate, name: gate2, position: [30, 500, 115], width_cm: 90, height_cm: 90, bar_cm: 10, color: green}
+  - {type: gate, name: gate3, position: [-20, 750, 105], width_cm: 90, height_cm: 90, bar_cm: 10, color: green}

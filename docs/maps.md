@@ -10,6 +10,8 @@ A map is a floor plus objects. Built-in maps are in `tellosim/maps/`:
 | `color_gates` | orange square gate, green ring, blue square gate | forward |
 | `landing_pad` | an "H" pad and a raised platform with an ArUco marker | mirror |
 | `aruco_board` | four ArUco markers on a wall, and a box | forward |
+| `tmr_gates` | three green 90 cm gates in a row (like DroneOps/Gate_tmr_color) | forward |
+| `tmr_landing` | a pad with a 10 cm 6x6 ArUco, 20 cm behind the start (like DroneOps/TMR_Landing) | mirror |
 
 ```python
 Tello(world="line_follower")          # built-in

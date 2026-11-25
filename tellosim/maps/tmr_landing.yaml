@@ -1,0 +1,11 @@
+name: tmr_landing
+description: >
+  A white pad with a 10 cm DICT_6X6_100 ArUco (id 0), like the Torneo Mexicano de Robotica
+  landing challenge (DroneOps/TMR_Landing). It is 20 cm behind the takeoff point, where a
+  downward mirror sees it right after takeoff. Mirror camera.
+floor: {type: lab_grid}
+start: {position: [0, 0], yaw_deg: 0}
+camera: {mode: mirror}
+objects:
+  - {type: landing_pad, name: pad, position: [0, -20], size_cm: 50, color: white, border_color: red,
+     marker: {dictionary: DICT_6X6_100, id: 0, size_cm: 10}}

@@ -42,8 +42,20 @@ tello.land()
 tello.end()
 ```
 
-Everything else (your threads, `time.sleep`, OpenCV processing) stays the same. To see what is
-going on from above:
+Everything else (your threads, `time.sleep`, OpenCV processing) stays the same.
+
+**Or don't change anything:** run your program as it is, and `import djitellopy` gets the
+simulator.
+
+```bash
+python -m tellosim.run --world tmr_gates --record run.mp4 my_program.py
+python -m tellosim.run --world tmr_landing --keys t@4,l@45 tests/test_tracking.py   # presses t, then l
+```
+
+At the end it prints what really happened: crashes, where it ended, gates flown through. How, and
+what we saw with the group's projects: [docs/your-code.md](docs/your-code.md).
+
+To see what is going on from above:
 
 ```python
 viewer = tello.sim.viewer(record="run.mp4")   # map from above + camera, live and recorded
@@ -104,6 +116,7 @@ Results in the simulator and how to move them to the real drone:
 
 | I want to... | Read |
 |---|---|
+| run my existing djitellopy program, without changing it | [docs/your-code.md](docs/your-code.md) |
 | build my own track (lines, markers, gates, boxes, walls, my floor) | [docs/maps.md](docs/maps.md) |
 | use another Tello's calibration, the forward camera or a mirror | [docs/camera.md](docs/camera.md) |
 | make the simulated drone behave like MY drone | [docs/drone-model.md](docs/drone-model.md) |

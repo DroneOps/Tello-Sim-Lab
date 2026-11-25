@@ -63,7 +63,10 @@ have their own rules. Every number is in the model JSON and explained in
 - `tof` = height above whatever is below + 10 cm (+ noise, garbage mid-flip);
 - `h` = its own height estimate, which wanders: don't use it;
 - `yaw`, `pitch`, `roll`;
-- `vgx` / `vgy` / `vgz` in dm/s;
+- `vgx` / `vgy` / `vgz` in whole dm/s, like the real one (checked against lab logs):
+  - `vgx` along the heading the drone had at takeoff, `vgy` to the right of it: they do not
+    turn with the drone;
+  - `vgz` is positive going **down**;
 - `bat`, `templ` / `temph`, `baro`, `time`, `agx` / `agy` / `agz`.
 
 ## 3. The camera: `Camera` + `Renderer`
