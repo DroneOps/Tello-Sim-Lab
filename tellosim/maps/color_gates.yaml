@@ -1,0 +1,10 @@
+name: color_gates
+description: >
+  Three colored gates to fly through with the forward camera: an orange square gate, a green
+  ring and a blue square gate, along a gentle zigzag. Gate centers at 100–120 cm high.
+floor: {type: lab_grid}
+start: {position: [0, 0], yaw_deg: 0}
+objects:
+  - {type: gate, name: gate1, position: [0, 200, 100], width_cm: 80, height_cm: 80, bar_cm: 8, facing_deg: 0, color: orange}
+  - {type: gate, name: gate2, position: [60, 400, 110], width_cm: 70, bar_cm: 8, facing_deg: 15, color: green, shape: circle}
+  - {type: gate, name: gate3, position: [20, 600, 120], width_cm: 80, height_cm: 80, bar_cm: 8, facing_deg: -10, color: blue}

@@ -1,0 +1,14 @@
+name: line_follower
+description: >
+  A black 5 cm line on a light floor: 1.5 m straight, a curve to the right, a straight and a
+  loop back, like a line-following track. Use it with the forward camera or a downward mirror
+  (camera_mode="mirror").
+floor: {type: plain, color: [215, 210, 200], noise: 1.0}
+start: {position: [0, -40], yaw_deg: 0}
+objects:
+  - type: line
+    width_cm: 5
+    color: black
+    points: [[0, -60], [0, 150], [10, 190], [40, 220], [80, 235], [130, 240], [250, 240],
+             [290, 230], [315, 200], [320, 160], [320, 0], [305, -40], [270, -60], [200, -70],
+             [60, -70], [20, -65], [0, -60]]

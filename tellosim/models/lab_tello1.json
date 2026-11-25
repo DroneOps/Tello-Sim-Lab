@@ -1,0 +1,6 @@
+{
+  "base": "lab_healthy",
+  "description": "Lab Tello #1: drifts ~3.7 cm/s to its right and wanders ~5.4 cm/s (measured 2026-11-11 with the floor seen through the mirror).",
+  "drift_right_cm_s": 3.7,
+  "random_drift_cm_s": 5.4
+}

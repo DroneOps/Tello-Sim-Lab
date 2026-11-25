@@ -1,0 +1,23 @@
+{
+  "description": "Optimistic drone: no drift, no lag, no sink, no slide when turning. Use it to debug your logic before trying the lab models.",
+  "forward_gain": 1.7,
+  "response_s": 0.4,
+  "combo_sink_cm_s": 0.0,
+  "forward_sink_cm_s": 0.0,
+  "up_gain": 0.9,
+  "down_gain": 0.5,
+  "vertical_response_s": 0.4,
+  "yaw_gain": 0.73,
+  "yaw_deadband": 6.6,
+  "yaw_response_s": 0.15,
+  "yaw_carry": 0.0,
+  "command_delay_s": 0.0,
+  "video_delay_s": 0.0,
+  "random_drift_cm_s": 0.0,
+  "turn_drift_cm_s": 0.0,
+  "takeoff_height_cm": [65.0, 65.0],
+  "takeoff_peak_cm": 0.0,
+  "takeoff_ok_s": [3.0, 3.0],
+  "height_bias_max_cm": 0.0,
+  "temp_c_per_min": 0.0
+}

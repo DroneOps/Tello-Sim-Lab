@@ -1,0 +1,6 @@
+{
+  "base": "lab_healthy",
+  "description": "Lab Tello #7: never holds still. Drifts ~11.7 cm/s to its right and wanders ~10.4 cm/s (measured 2026-11-11 with the floor seen through the mirror). Good to test position hold.",
+  "drift_right_cm_s": 11.7,
+  "random_drift_cm_s": 10.4
+}

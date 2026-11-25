@@ -1,0 +1,12 @@
+name: apriltag_course
+description: >
+  The AprilTag-Detection test circuit: 8 cm tag25h9 tags on the floor, seen with a downward
+  mirror. Tag 1 (turn right) 80 cm ahead, tag 2 (turn left) 70 cm to the right of it, tag 7
+  (land) 70 cm ahead of tag 2.
+camera: {mode: mirror, mirror_tilt_deg: -10.3}
+floor: {type: lab_grid}
+start: {position: [0, 0], yaw_deg: 0}
+objects:
+  - {type: apriltag, id: 1, position: [0, 80], size_cm: 8}
+  - {type: apriltag, id: 2, position: [70, 80], size_cm: 8}
+  - {type: apriltag, id: 7, position: [70, 150], size_cm: 8}

@@ -1,0 +1,11 @@
+name: landing_pad
+description: >
+  Two landing pads: an "H" pad 1.5 m ahead and a raised 20 cm platform with an ArUco marker
+  (DICT_4X4_50, id 0) 1.5 m to the right of it. Use a downward mirror to land on them
+  precisely, or the forward camera to find them from afar.
+floor: {type: lab_grid}
+start: {position: [0, 0], yaw_deg: 0}
+objects:
+  - {type: landing_pad, name: pad_h, position: [0, 150], size_cm: 60, color: white, border_color: red, letter: H}
+  - {type: landing_pad, name: pad_aruco, position: [150, 150], size_cm: 60, height_cm: 20, color: white,
+     border_color: blue, marker: {dictionary: DICT_4X4_50, id: 0, size_cm: 30}}

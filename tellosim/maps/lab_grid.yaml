@@ -1,0 +1,7 @@
+name: lab_grid
+description: >
+  The empty DroneOps lab floor: dark, with a grid of light tape every 60 cm. Good for hovering,
+  testing position hold and drift. Takeoff at the origin, facing north (+y).
+floor: {type: lab_grid}
+start: {position: [0, 0], yaw_deg: 0}
+objects: []
