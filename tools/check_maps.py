@@ -235,7 +235,7 @@ def check_solid(world, o, rep: Report) -> None:
     if isinstance(o, Box):
         x, y = o.position[:2]
         sx, sy, sz = o.size
-        ax, ay = compass(o.rotation_deg + 90), compass(o.rotation_deg)
+        ax = compass(o.rotation_deg + 90)
         rep.check(abs(o.top_height(x, y) - sz) < 0.1 and o.collides(np.array([x, y, sz / 2]), R) is not None,
                   f"{label(o)}: stops the drone, the ToF reads its top ({sz:g} cm)")
         beside = np.array([x, y, sz / 2]) + (sx / 2 + R + 3) * np.append(ax[:2], 0)

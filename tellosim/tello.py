@@ -19,7 +19,6 @@ crashes, the world, a viewer). See docs/how-it-works.md.
 from __future__ import annotations
 
 import logging
-import math
 import threading
 import time
 
