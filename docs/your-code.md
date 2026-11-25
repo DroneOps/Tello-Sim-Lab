@@ -31,6 +31,7 @@ python -m tellosim.run --world tmr_gates my_program.py
 | `--world`, `--model`, `--camera`, `--camera-mode`, `--seed` | the map, the drone, the camera ([maps.md](maps.md), [drone-model.md](drone-model.md), [camera.md](camera.md)) |
 | `--camera-set KEY=VALUE` | any camera field, e.g. `--camera-set mirror_axis=h --camera-set mirror_tilt_deg=-5`; repeat it |
 | `--faults JSON` | e.g. `--faults '{"takeoff": "collapse"}'` ([faults.md](faults.md)) |
+| `--fog N` or `--fog JSON` | fog with N cm of visibility, or smoke: `--fog '{"visibility_cm": 300, "patches": 0.5}'` ([maps.md](maps.md#fog-and-smoke)) |
 | `--viewer` | also show the map from above |
 | `--record run.mp4` | record the map and the camera, side by side |
 | `--headless` | no windows: `cv2.imshow` does nothing, `cv2.waitKey` returns -1 |
@@ -51,9 +52,11 @@ python -m tellosim.run --world tmr_gates my_program.py
 [tellosim.run] flew 257 cm; ended at x=24 y=4 z=0 cm, yaw 0; highest 93 cm
 [tellosim.run] gate gate1: flown through
 [tellosim.run] distance to the line: median 6 cm, max 26 cm
+[tellosim.run] landing pad pad: touched down 64 cm from its center (off it), at 61 s
 ```
 
-The gate lines appear on maps with gates, and the line distance on maps with floor lines.
+The gate lines appear on maps with gates, the line distance on maps with floor lines, and the
+landing on maps with pads (where the pad was when the drone touched down, if it moves).
 Positions are in cm from the start: x to the east (right at the start), y to the north (ahead
 at the start). See [maps.md](maps.md#coordinates).
 
@@ -115,23 +118,35 @@ Neither zigzagged: the sideways rc stayed at ±15 (once 26).
   instead of stopping: a small side-to-side wobble, on the real drone too.
 
 **[TMR_Landing](https://github.com/DroneOps/TMR_Landing)** (`tests/test_tracking.py`, map
-`tmr_landing`): it takes off with `t` and lands with `l`.
+`tmr_landing`): it takes off with `t` and lands with `l`. On this map the pad starts moving 10 s
+after the start: left and right at 10 cm/s, 1 m to each side.
 
 ```bash
-python -m tellosim.run --world tmr_landing --keys t@4,l@45 --seconds 55 tests/test_tracking.py
+python -m tellosim.run --world tmr_landing --keys t@4,l@60 --seconds 70 tests/test_tracking.py
+python -m tellosim.run --world tmr_landing --keys t@4,l@60 --seconds 70 --fog '{"visibility_cm": 300, "patches": 0.5}' tests/test_tracking.py
 ```
 
 - It runs as is: it detects the ArUco and follows it.
 - **The signs are right with the lab mirror** (`mirror_axis` `v`, the default). With
   `--camera-set mirror_axis=h` the commands point away from the pad and it flies off. If your
   mirror flips the image the other way, check the signs before flying.
-- **Result:** after 38 s of tracking it was 19–34 cm from the pad, and it had flown 2.6–3 m back
-  and forth.
-- **Why:**
+- **With the pad still** (first version of the map): after 38 s of tracking it was 19–34 cm
+  from the pad, and it had flown 2.6–3 m back and forth.
   - a 15 cm error already gives the maximum command (±50);
   - it centers the marker in the image, but with the mirror tilt the image center is ~20 cm
     behind the point below the drone.
+- **With the pad moving** (2 runs, with and without smoke of 3 m visibility: the same flight):
+  - it follows the pad, 15–20 cm from it, including when the pad turns around;
+  - but it sends ud = 0 while chasing, and the lab Tello sinks when it moves sideways and
+    forward (5–7 cm/s measured). In 18 s it went down from 92 to 27 cm;
+  - at 27 cm the mirror sees only a small patch of floor: it lost the pad at ~30 s and
+    hovered there; when `l` came, it touched down 64 cm from the pad.
+- **Fog and smoke** (still frames, its own detector): 
+  - at 90 cm high it still sees the marker with 1.5 m of visibility, and loses it below that
+    (with drifting smoke, below 2 m);
+  - at 130 cm it needs 2 m of visibility.
 - **What to try:**
+  - hold the height while tracking (`tellolab.AltitudeHold`, or a P on the ToF);
   - lower gains or a lower maximum;
   - aim at the point below the drone (`tellolab.point_below_drone`, or
     `tellolab.vision.floor_point_from_pixel`).

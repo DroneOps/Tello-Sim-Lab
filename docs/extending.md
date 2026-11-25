@@ -9,6 +9,8 @@
 | my camera | a calibration JSON, `camera_mode`, `mirror_tilt_deg` ([camera.md](camera.md)) |
 | things going wrong | `Faults` ([faults.md](faults.md)) |
 | more or less noise in the image | `noise_std`, `blur_sigma` |
+| fog or smoke | `fog:` in the map, `Tello(fog=...)`, `--fog` ([maps.md](maps.md#fog-and-smoke)) |
+| something that moves | `motion:` on any object but a line ([maps.md](maps.md#moving-objects)) |
 | remove the drift entirely | `model="ideal"`, or `random_drift_cm_s=0, turn_drift_cm_s=0` |
 | remove crashes | `Tello(crash_stops=False)`: the crash is still recorded in `tello.sim.crash` |
 | run 100 flights quickly | simulated time (below) |
@@ -72,6 +74,12 @@ OBJECT_TYPES["pole"] = Pole        # now "type: pole" works in map files
   floor).
 - **`top_height(x, y)`:** height the ToF reads under (x, y).
 - **`collides(p, radius)`:** a message if the drone touches it.
+- **`supports(x, y)`:** whether (x, y) is on top of it: a drone landed there moves with it if it
+  has `motion`.
+
+Motion is handled outside the object: with `motion`, the world shifts its primitives, its
+`top_height` and its `collides` by where it is at time `t`. Your object only describes itself
+at its `position`.
 
 Curved things are polygons with many sides (see the circular `Gate`).
 
@@ -119,7 +127,7 @@ Other ideas:
 
 ## Tests
 
-Add a test in `tests/` for anything you add. They run in simulated time; see
+Run `python tools/check_maps.py` on your maps, and add a test in `tests/` for anything you add. They run in simulated time; see
 `tests/test_tellosim.py` for the patterns:
 - **teleport the drone** with `place()`;
 - **detect markers** in `t.sim.capture()`;

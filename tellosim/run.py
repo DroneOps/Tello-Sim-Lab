@@ -13,6 +13,7 @@ Options:
   --world, --model, --camera, --camera-mode, --seed   simulation settings (see docs/how-it-works.md)
   --camera-set mirror_axis=h                          any camera field (docs/camera.md); repeat it
   --faults '{"takeoff": "no_ok"}'                     faults as JSON (docs/faults.md)
+  --fog 300  or  --fog '{"visibility_cm": 300, "patches": 0.6}'   fog or smoke (docs/maps.md)
   --headless       no windows: cv2.imshow does nothing and cv2.waitKey returns -1 (no keys)
   --viewer         also show the map from above
   --record FILE    record the map + camera view to an mp4
@@ -117,6 +118,7 @@ def main() -> None:
     ap.add_argument("--camera-set", action="append", default=[], metavar="KEY=VALUE")
     ap.add_argument("--faults", default=None, help="JSON, e.g. '{\"takeoff\": \"collapse\"}'")
     ap.add_argument("--keys", default="", help="key@seconds,... e.g. t@4,q@40")
+    ap.add_argument("--fog", default=None, help="visibility in cm, or JSON with the Fog fields")
     ap.add_argument("--headless", action="store_true")
     ap.add_argument("--viewer", action="store_true")
     ap.add_argument("--record", default=None)
@@ -133,6 +135,8 @@ def main() -> None:
         options[key.strip()] = _value(value.strip())
     if a.faults:
         options["faults"] = json.loads(a.faults)
+    if a.fog:
+        options["fog"] = json.loads(a.fog)
     _install_fake_djitellopy(options, a.viewer, a.record)
     if a.headless:
         _headless()
@@ -150,7 +154,7 @@ def main() -> None:
     sys.argv = [script, *a.script_args]
     sys.path.insert(0, os.path.dirname(script))
     print(f"[tellosim.run] {os.path.basename(script)} in the simulator: world {a.world}, model {a.model}"
-          + (f", camera {a.camera_mode}" if a.camera_mode else ""), flush=True)
+          + (f", camera {a.camera_mode}" if a.camera_mode else "") + (f", fog {a.fog}" if a.fog else ""), flush=True)
     try:
         runpy.run_path(script, run_name="__main__")
     except (KeyboardInterrupt, SystemExit):

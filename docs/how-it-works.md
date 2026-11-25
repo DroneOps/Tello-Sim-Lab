@@ -81,13 +81,19 @@ Each frame is drawn from the pose the drone had `video_delay_s` ago (~170 ms):
      down.
    - It is computed at half resolution: the floor is smooth.
 2. **Objects, far to near.**
-   - Markers and pads are flat pictures warped with a homography.
+   - Markers and pads are flat pictures warped with a homography; round pads have
+     transparent corners.
    - Gates, boxes, walls and panels are colored polygons clipped against the camera's near
      plane.
-   - Markers stuck on a wall are drawn right after their wall.
-3. **Blur and sensor noise.** Then, with a mirror, the image is flipped like the real one.
+   - Things lying on the floor are drawn first, lowest first.
+   - Markers stuck on a wall or a pad are drawn right after it.
+   - Objects with `motion` are drawn where they were when the frame was taken.
+3. **Fog or smoke,** if the map or `Tello(fog=...)` has it: each pixel fades towards the fog
+   color with its distance to the camera.
+4. **Blur and sensor noise.** Then, with a mirror, the image is flipped like the real one.
 
-You get RGB frames (like djitellopy). Rendering takes ~20 ms per frame on a laptop.
+You get RGB frames (like djitellopy). Rendering takes ~17 ms per frame on a laptop (~23 with
+fog).
 
 ## Real time and simulated time
 

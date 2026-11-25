@@ -48,6 +48,11 @@ class Viewer:
                     pts.append(tuple(v[:2]))
             if isinstance(o, FloorLine):
                 pts += [tuple(p) for p in o.points]
+            if o.motion and getattr(o, "position", None) is not None:  # the whole run of a moving object
+                m_ = o.motion
+                d = compass(m_.direction_deg)[:2] * m_.distance_cm
+                x, y = o.position[:2]
+                pts += [(x + d[0] / 2, y + d[1] / 2), (x - d[0] / 2, y - d[1] / 2), (x + d[0], y + d[1])]
         xs, ys = [p[0] for p in pts], [p[1] for p in pts]
         m = 120
         self.x0, self.x1, self.y0, self.y1 = min(xs) - m, max(xs) + m, min(ys) - m, max(ys) + m
@@ -75,17 +80,20 @@ class Viewer:
             hh, ww = min(dst.shape[0], MAP_PX - oy), min(dst.shape[1], MAP_PX - ox)
             canvas[oy:oy + hh, ox:ox + ww] = dst[:hh, :ww]
         for o in w.objects:
-            self._draw_object(canvas, o)
+            if not o.motion:  # moving objects are drawn on every frame
+                self._draw_object(canvas, o)
         return canvas
 
-    def _draw_object(self, img, o) -> None:
+    def _draw_object(self, img, o, off=(0.0, 0.0)) -> None:
+        def P(x, y):
+            return self.px(x + off[0], y + off[1])
         if isinstance(o, Marker):
-            c = self.px(*o.position[:2])
+            c = P(*o.position[:2])
             s = max(3, int(o.size_cm * self.k / 2))
             cv2.rectangle(img, (c[0] - s, c[1] - s), (c[0] + s, c[1] + s), WHITE, -1)
             cv2.putText(img, str(o.id), (c[0] + s + 2, c[1] + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.4, WHITE, 1, cv2.LINE_AA)
         elif isinstance(o, LandingPad):
-            c, s = self.px(*o.position[:2]), max(3, int(o.size_cm * self.k / 2))
+            c, s = P(*o.position[:2]), max(3, int(o.size_cm * self.k / 2))
             if o.shape == "circle":
                 cv2.circle(img, c, s, bgr(o.border_color), 2, cv2.LINE_AA)
             else:
@@ -95,12 +103,12 @@ class Viewer:
             right = np.cross(np.array([0, 0, 1.0]), n)
             half = o.width_cm / 2 + getattr(o, "bar_cm", 0)
             a, b = c - half * right, c + half * right
-            cv2.line(img, self.px(a[0], a[1]), self.px(b[0], b[1]), bgr(o.color), 4, cv2.LINE_AA)
+            cv2.line(img, P(a[0], a[1]), P(b[0], b[1]), bgr(o.color), 4, cv2.LINE_AA)
         elif isinstance(o, Box):
             v = o._corners()[:4]
-            cv2.fillPoly(img, [np.array([self.px(p[0], p[1]) for p in v], np.int32)], bgr(o.color))
+            cv2.fillPoly(img, [np.array([P(p[0], p[1]) for p in v], np.int32)], bgr(o.color))
         elif isinstance(o, Wall):
-            cv2.line(img, self.px(*o.start), self.px(*o.end), bgr(o.color), 5)
+            cv2.line(img, P(*o.start), P(*o.end), bgr(o.color), 5)
 
     def _footprint(self, x, y, z, yaw):
         """Where the image corners hit the floor."""
@@ -125,6 +133,10 @@ class Viewer:
             self.trail.append((x, y))
         out = np.full((H_OUT, W_OUT, 3), 30, np.uint8)
         m = self._background.copy()
+        t_now = self.sim.clock.now() - self.sim.drone.t0
+        for o in self.sim.world.objects:
+            if o.motion:
+                self._draw_object(m, o, o.motion.offset(t_now))
         fp = self._footprint(x, y, z, yaw)
         if fp and z > 5:
             cv2.polylines(m, [np.array([self.px(*p) for p in fp], np.int32)], True, CYAN, 1, cv2.LINE_AA)

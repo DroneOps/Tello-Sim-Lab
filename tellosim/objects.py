@@ -62,10 +62,65 @@ class SolidPoly:
     normal: np.ndarray | None = None
 
 
+# ---------------------------------------------------------------------------------- motion
+@dataclass
+class Motion:
+    """An object that moves at constant speed along a straight line (``motion:`` in a map).
+
+    direction_deg: where it moves (compass: 90 = east, i.e. to the right of a drone that took off
+    facing north). distance_cm: length of the run, centered on the object's position.
+    back_and_forth: true = it turns around at each end, forever; false = it goes once from the
+    position, distance_cm along direction_deg, and stops. start_s: seconds after the simulation
+    starts before it begins to move."""
+    direction_deg: float = 90.0
+    distance_cm: float = 200.0
+    speed_cm_s: float = 10.0
+    back_and_forth: bool = True
+    start_s: float = 0.0
+
+    def _travel(self, t: float) -> tuple[float, float]:
+        """(signed position along the line, signed speed) at time t."""
+        L, v = float(self.distance_cm), float(self.speed_cm_s)
+        if L <= 0 or v == 0 or t <= self.start_s:
+            return 0.0, 0.0
+        s = (t - self.start_s) * abs(v)
+        if not self.back_and_forth:
+            return (min(s, L), abs(v) if s < L else 0.0)
+        phase = (s + L / 2) % (2 * L)  # triangle wave: starts at the center going forward
+        return (phase - L / 2, abs(v)) if phase < L else (1.5 * L - phase, -abs(v))
+
+    def offset(self, t: float) -> np.ndarray:
+        d, _ = self._travel(t)
+        return d * compass(self.direction_deg)[:2]
+
+    def velocity(self, t: float) -> np.ndarray:
+        _, v = self._travel(t)
+        return v * compass(self.direction_deg)[:2]
+
+
+def as_motion(spec) -> Motion | None:
+    if spec is None or isinstance(spec, Motion):
+        return spec
+    known = set(Motion.__dataclass_fields__)
+    unknown = set(spec) - known
+    if unknown:
+        raise ValueError(f"motion: unknown fields {sorted(unknown)} (known: {', '.join(sorted(known))})")
+    return Motion(**spec)
+
+
+def moved(prim, off: np.ndarray):
+    """A copy of a primitive shifted by off (x, y)."""
+    d = np.array([off[0], off[1], 0.0])
+    if isinstance(prim, TexturedQuad):
+        return TexturedQuad(prim.corners + d, prim.image, prim.normal)
+    return SolidPoly(prim.vertices + d, prim.color, prim.normal)
+
+
 # ---------------------------------------------------------------------------------- base class
 @dataclass
 class SimObject:
     name: str = ""
+    motion: object = None  # a Motion (or its dict): the object moves; see Motion
 
     def primitives(self) -> list:
         """What to draw: TexturedQuad and SolidPoly instances in world coordinates."""
@@ -230,6 +285,8 @@ class FloorLine(SimObject):
     closed: bool = False
 
     def paint_floor(self, canvas: np.ndarray, to_px) -> None:
+        if self.motion:
+            raise ValueError("a line is painted on the floor texture and cannot move (use a moving landing_pad)")
         if len(self.points) < 2:
             return
         px_per_cm = abs(to_px(1, 0)[0] - to_px(0, 0)[0])
@@ -262,7 +319,6 @@ class LandingPad(SimObject):
         n = int(self.size_cm * s)
         img = np.zeros((n, n, 3), np.uint8)
         if self.shape == "circle":
-            img[:] = bgr("dark_floor")  # outside the circle: like the floor (drawn on top of it)
             cv2.circle(img, (n // 2, n // 2), n // 2, bgr(self.border_color), -1, cv2.LINE_AA)
             cv2.circle(img, (n // 2, n // 2), n // 2 - int(self.border_cm * s), bgr(self.color), -1, cv2.LINE_AA)
         else:
@@ -274,6 +330,10 @@ class LandingPad(SimObject):
             (tw, th), _ = cv2.getTextSize(self.letter, cv2.FONT_HERSHEY_SIMPLEX, scale, max(2, n // 20))
             cv2.putText(img, self.letter, ((n - tw) // 2, (n + th) // 2), cv2.FONT_HERSHEY_SIMPLEX, scale,
                         bgr(self.letter_color), max(2, n // 20), cv2.LINE_AA)
+        if self.shape == "circle":  # outside the circle: transparent (alpha channel)
+            alpha = np.zeros((n, n), np.uint8)
+            cv2.circle(alpha, (n // 2, n // 2), n // 2, 255, -1, cv2.LINE_AA)
+            img = np.dstack([img, alpha])
         return img
 
     def _axes(self):
@@ -289,11 +349,18 @@ class LandingPad(SimObject):
         corners[:, 2] += 0.03
         prims: list = [TexturedQuad(corners, self._image(), np.array([0.0, 0.0, 1.0]))]
         if self.height_cm > 0:
-            bottom = corners.copy()
+            if self.shape == "circle":  # the side of a cylinder, in 32 faces
+                k = 32
+                ang = np.linspace(0, 2 * math.pi, k, endpoint=False)
+                ring = c + a * (np.cos(ang)[:, None] * right + np.sin(ang)[:, None] * up)
+            else:
+                ring = corners.copy()
+            ring[:, 2] = self.height_cm
+            bottom = ring.copy()
             bottom[:, 2] = 0.0
-            for i in range(4):
-                j = (i + 1) % 4
-                face = np.array([corners[i], corners[j], bottom[j], bottom[i]])
+            for i in range(len(ring)):
+                j = (i + 1) % len(ring)
+                face = np.array([ring[i], ring[j], bottom[j], bottom[i]])
                 normal = np.cross(face[1] - face[0], face[3] - face[0])
                 normal = normal / (np.linalg.norm(normal) + 1e-9)
                 if normal @ (face.mean(axis=0) - c) < 0:
@@ -321,9 +388,21 @@ class LandingPad(SimObject):
         if self.height_cm > 0 and p[2] < self.height_cm - 2:
             c, right, up = self._axes()
             d = np.array([p[0] - c[0], p[1] - c[1], 0.0])
-            if abs(d @ right) <= self.size_cm / 2 + radius and abs(d @ up) <= self.size_cm / 2 + radius:
+            if self.shape == "circle":
+                hit = math.hypot(d[0], d[1]) <= self.size_cm / 2 + radius
+            else:
+                hit = abs(d @ right) <= self.size_cm / 2 + radius and abs(d @ up) <= self.size_cm / 2 + radius
+            if hit:
                 return f"hit the side of landing pad {self.name or ''}".strip()
         return None
+
+    def supports(self, x: float, y: float) -> bool:
+        """Is (x, y) on the pad? (a drone landed there moves with a moving pad)"""
+        c, right, up = self._axes()
+        d = np.array([x - c[0], y - c[1], 0.0])
+        if self.shape == "circle":
+            return math.hypot(d[0], d[1]) <= self.size_cm / 2
+        return abs(d @ right) <= self.size_cm / 2 and abs(d @ up) <= self.size_cm / 2
 
 
 # ---------------------------------------------------------------------------------- colored solids
@@ -350,7 +429,7 @@ class ColorPanel(SimObject):
         c, n = np.array(self.position, float), compass(self.facing_deg)
         right = np.cross(np.array([0.0, 0.0, 1.0]), n)
         d = p - c
-        if abs(d @ n) < radius and abs(d @ right) < self.width_cm / 2 and abs(d[2]) < self.height_cm / 2:
+        if abs(d @ n) < radius and abs(d @ right) < self.width_cm / 2 + radius and abs(d[2]) < self.height_cm / 2 + radius:
             return f"hit panel {self.name or ''}".strip()
         return None
 
@@ -470,6 +549,9 @@ class Box(SimObject):
     def top_height(self, x, y):
         return float(self.size[2]) if self._inside(x, y) else 0.0
 
+    def supports(self, x: float, y: float) -> bool:
+        return self._inside(x, y)
+
     def collides(self, p, radius):
         if p[2] < self.size[2] - 2 and self._inside(p[0], p[1], radius):
             return f"hit box {self.name or ''}".strip()
@@ -518,4 +600,8 @@ def make_object(spec: dict) -> SimObject:
     for k in ("position", "size", "start", "end"):
         if isinstance(spec.get(k), list):
             spec[k] = tuple(spec[k])
+    if spec.get("motion") is not None:
+        if cls is FloorLine:
+            raise ValueError("line: a line is painted on the floor and cannot move (use a moving landing_pad)")
+        spec["motion"] = as_motion(spec["motion"])
     return cls(**spec)

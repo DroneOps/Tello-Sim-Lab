@@ -29,7 +29,7 @@ from .camera import Camera
 from .drone import Faults, RealClock, SimClock, SimDrone
 from .model import load_model
 from .render import Renderer
-from .world import load_map
+from .world import as_fog, load_map
 
 LOGGER = logging.getLogger("tellosim")
 if not LOGGER.handlers:
@@ -82,8 +82,10 @@ class Sim:
     def __init__(self, world="lab_grid", model="lab_healthy", camera="lab_tello", camera_mode=None,
                  seed: int = 0, faults: Faults | dict | None = None, battery: float = 90.0,
                  temperature_c: float | None = None, realtime: bool = True, crash_stops: bool = True,
-                 **camera_overrides) -> None:
+                 fog=None, **camera_overrides) -> None:
         self.world = load_map(world)
+        if fog is not None:  # fog or smoke: overrides the map's (fog=False: clear air)
+            self.world.fog = as_fog(fog)
         self.model = load_model(model)
         overrides = {**self.world.camera, **camera_overrides}  # the map suggests, the caller decides
         if camera_mode:
@@ -132,8 +134,9 @@ class Sim:
         el = now - self.drone.t0
         if any(a <= el < b for a, b in self.drone.faults.video_dropouts):
             return None
-        x, y, z, yaw = self.drone.pose_at(now - self.model.video_delay_s)
-        bgr_img = self.renderer.render(x, y, z, yaw)
+        seen = now - self.model.video_delay_s
+        x, y, z, yaw = self.drone.pose_at(seen)
+        bgr_img = self.renderer.render(x, y, z, yaw, t=seen - self.drone.t0)
         return bgr_img[..., ::-1].copy()  # djitellopy gives RGB
 
     def world_changed(self) -> None:

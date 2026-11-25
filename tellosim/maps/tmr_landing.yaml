@@ -1,11 +1,23 @@
 name: tmr_landing
 description: >
   A white pad with a 10 cm DICT_6X6_100 ArUco (id 0), like the Torneo Mexicano de Robotica
-  landing challenge (DroneOps/TMR_Landing). It is 20 cm behind the takeoff point, where a
-  downward mirror sees it right after takeoff. Mirror camera.
+  landing challenge on a mobile platform (DroneOps/TMR_Landing). It starts 20 cm behind the
+  takeoff point, where a downward mirror sees it right after takeoff; 10 s after the start it
+  moves left and right at a constant 10 cm/s, 1 m to each side. A drone that lands on it moves
+  with it. Mirror camera. An approximation, not measured on a real TMR course.
 floor: {type: lab_grid}
 start: {position: [0, 0], yaw_deg: 0}
 camera: {mode: mirror}
+# The real TMR will have fog or smoke. Uncomment (or run with --fog 300):
+# fog: {visibility_cm: 300, patches: 0.5}
 objects:
-  - {type: landing_pad, name: pad, position: [0, -20], size_cm: 50, color: white, border_color: red,
-     marker: {dictionary: DICT_6X6_100, id: 0, size_cm: 10}}
+  - type: landing_pad
+    name: pad
+    position: [0, -20]
+    size_cm: 50
+    color: white
+    border_color: red
+    marker: {dictionary: DICT_6X6_100, id: 0, size_cm: 10}
+    # left and right (90 = east), 200 cm in all, at 10 cm/s, from 10 s after the start.
+    # Remove these lines for a pad that stays still.
+    motion: {direction_deg: 90, distance_cm: 200, speed_cm_s: 10, start_s: 10}

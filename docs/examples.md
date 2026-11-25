@@ -21,7 +21,7 @@ which picks the Tello class in `examples/common.py`.
 | `line_follower.py` | follow a dark line with a downward mirror: the dark pixels become floor points, a line is fitted, then yaw from its angle and sideways from its offset | whole loop, **6 cm** from the line (median), 26 max |
 | `color_gate.py` | orange, green, blue gates with the forward camera: find the opening, center it on the horizon row, go through | **3 of 3** gates, no crash |
 | `landing_pad.py` | find the red-border pad with the mirror, get over it at 150 cm, land | **5 cm** from the center |
-| `aruco_follow.py` | keep 120 cm in front of an ArUco marker on a wall | **117 cm** |
+| `aruco_follow.py` | keep 120 cm in front of an ArUco marker on a wall | **105–133 cm** in 4 runs (it varies from run to run) |
 | `apriltag_mission.py` | tags on the floor with a mirror: 1 turn right, 2 left, 7 land... | executed **1, 2, 7**, landed **10 cm** from tag 7 |
 
 **Things the examples had to learn** (they will happen with your own code too):

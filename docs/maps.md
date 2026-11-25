@@ -11,7 +11,7 @@ A map is a floor plus objects. Built-in maps are in `tellosim/maps/`:
 | `landing_pad` | an "H" pad and a raised platform with an ArUco marker | mirror |
 | `aruco_board` | four ArUco markers on a wall, and a box | forward |
 | `tmr_gates` | three green 110 cm gates 5 m apart, the first 5 m ahead (like DroneOps/Gate_tmr_color) | forward |
-| `tmr_landing` | a pad with a 10 cm 6x6 ArUco, 20 cm behind the start (like DroneOps/TMR_Landing) | mirror |
+| `tmr_landing` | a pad with a 10 cm 6x6 ArUco, 20 cm behind the start, moving left and right at 10 cm/s (like DroneOps/TMR_Landing) | mirror |
 
 ```python
 Tello(world="line_follower")          # built-in
@@ -38,6 +38,7 @@ camera: {mode: forward}            # optional: the camera this map is meant for 
 floor: {type: lab_grid}            # see "Floor" below
 start: {position: [0, 0], yaw_deg: 0}
 background: [150, 150, 145]        # what the camera sees above the horizon
+fog: {visibility_cm: 400}          # optional: fog or smoke (see "Fog and smoke")
 objects:
   - {type: apriltag, id: 1, position: [0, 100], size_cm: 8}
   - {type: gate, position: [0, 250, 100], width_cm: 80, height_cm: 80, color: orange}
@@ -84,7 +85,7 @@ floor.png`, `size_cm: [width, depth]` and `center`.
 **`line`:** a painted or taped line on the floor.
 `points: [[x, y], ...]`, `width_cm` (5), `color` (black), `closed` (false).
 
-**`landing_pad`**
+**`landing_pad`** (it can move: see "Moving objects")
 
 | Field | Default | Meaning |
 |---|---|---|
@@ -94,7 +95,7 @@ floor.png`, `size_cm: [width, depth]` and `center`.
 | `color`, `border_color`, `border_cm` | white, red, 4 | |
 | `letter`, `letter_color` | "H", black | drawn when there is no marker |
 | `marker` | none | `{dictionary, id, size_cm}` in the middle |
-| `height_cm` | 0 | > 0: a raised platform (the ToF reads its top; its sides can be hit) |
+| `height_cm` | 0 | > 0: a raised platform (the ToF reads its top; its sides can be hit). Round ones are cylinders |
 | `rotation_deg`, `side_color` | 0, gray | |
 
 **`gate`:** fly through it.
@@ -118,6 +119,99 @@ Hitting the frame or the legs is a crash.
 
 Any object can have a `name`, used by `world.find(name)`, `world.remove(name)` and the crash
 messages.
+
+## Moving objects
+
+Any object except a line can move at constant speed along a straight line, with `motion`:
+
+```yaml
+  - type: landing_pad
+    position: [0, -20]
+    size_cm: 50
+    motion: {direction_deg: 90, distance_cm: 200, speed_cm_s: 10, start_s: 10}
+```
+
+| Field | Default | Meaning |
+|---|---|---|
+| `direction_deg` | 90 | where it moves (compass: 90 = east = to the right at the start) |
+| `distance_cm` | 200 | length of the run, centered on `position` (here from x = −100 to +100) |
+| `speed_cm_s` | 10 | constant speed |
+| `back_and_forth` | true | true: it turns around at each end, forever. false: it goes once from `position`, `distance_cm` along `direction_deg`, and stops |
+| `start_s` | 0 | seconds after the start before it moves (time to take off and find it) |
+
+- **The camera sees it where it is** (also through the ~170 ms video delay), and the viewer
+  draws it moving.
+- **It moves its collisions and the ToF too:** a moving box or raised pad can hit the drone.
+- **A drone that lands on a moving pad or box moves with it.**
+- **The report of `tellosim.run`** says how far from the pad's center the drone touched down,
+  measured where the pad was at that moment.
+- A line is painted on the floor texture and cannot move: use a pad or a panel.
+- In Python: `LandingPad(..., motion={"direction_deg": 90, "speed_cm_s": 10})`, and
+  `world.offset(obj, t)` says where it is at `t` seconds.
+
+## Fog and smoke
+
+The real TMR will have fog or smoke. Add it to the map, or when you run:
+
+```yaml
+fog: {visibility_cm: 300, patches: 0.5}
+```
+
+```bash
+python -m tellosim.run --world tmr_landing --fog 300 my_program.py
+python -m tellosim.run --world tmr_gates --fog '{"visibility_cm": 800, "patches": 0.6, "color": [120, 120, 120]}' my_program.py
+```
+
+```python
+Tello(world="tmr_gates", fog=800)                                  # even fog, 8 m of visibility
+Tello(world="tmr_gates", fog={"visibility_cm": 400, "patches": 0.6})  # smoke
+Tello(world="tmr_gates", fog=False)                                # clear air, even if the map has fog
+```
+
+| Field | Default | Meaning |
+|---|---|---|
+| `visibility_cm` | 500 | at this distance things are 95 % hidden. Each pixel fades towards `color` as exp(−3 d / visibility), d = its distance to the camera |
+| `color` | [205, 205, 205] | light gray fog; darker for smoke |
+| `patches` | 0 | 0 = even fog. 0.3–1 = smoke: thicker and thinner patches that drift across the image |
+| `patch_speed` | 0.03 | how fast the patches drift (image widths per second) |
+| `seed` | 0 | another pattern of patches |
+
+**How much is a lot:**
+- with 4 m of visibility, a gate 5 m away is gone;
+- with 1.5 m, a marker 1 m below a mirror is barely detected (TMR_Landing's detector, see
+  [your-code.md](your-code.md));
+- start with 3–8 m and go down.
+
+**Only the image changes:** the ToF, the drone's own sensors and the physics do not see the
+fog. The patches move across the image, not through the room, so turning does not move them.
+It adds ~6 ms per frame.
+
+## Check your map
+
+```bash
+python tools/check_maps.py my_track.yaml
+python tools/check_maps.py my_track.yaml --images views/   # also save what each check saw
+```
+
+It checks:
+- **Textures:**
+  - the floor texture covers every object (and the whole run of moving ones) and the start;
+  - lines are at least 3 px wide in the texture;
+  - round pads have no square around them.
+- **Dimensions:**
+  - every marker is detected by OpenCV and measures its `size_cm` within 3 %;
+  - every rectangular gate's opening measures its `width_cm` in the image;
+  - markers fit on their pad;
+  - gates do not go into the floor.
+- **Collisions:**
+  - flying through a gate's opening is free, and its frame and legs are not;
+  - boxes, walls, panels and raised pads stop the drone and leave room around them;
+  - flat things never do;
+  - nothing crosses the takeoff spot.
+- **Motion and fog:** moving objects keep their speed and run, and the fog has a sensible
+  visibility.
+
+Every built-in map passes it (it is also a test).
 
 ## In Python
 

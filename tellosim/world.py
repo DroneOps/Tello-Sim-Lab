@@ -18,7 +18,7 @@ import cv2
 import numpy as np
 import yaml
 
-from .objects import SimObject, bgr, make_object
+from .objects import SimObject, as_motion, bgr, make_object, moved
 
 MAPS_DIR = Path(__file__).resolve().parent / "maps"
 
@@ -84,8 +84,37 @@ class Floor:
 
 
 @dataclass
+class Fog:
+    """Fog or smoke between the camera and everything it sees (``fog:`` in a map).
+
+    visibility_cm: at this distance things are 95 % hidden (contrast falls as exp(-3 d / visibility)).
+    color: of the fog (light gray) or smoke (darker). patches: 0 = even fog; 0.3–1 = smoke, thicker
+    and thinner in drifting patches. patch_speed: how fast the patches drift across the image
+    (image widths per second). It only changes the image: the ToF and the physics are not affected."""
+    visibility_cm: float = 500.0
+    color: object = (205, 205, 205)
+    patches: float = 0.0
+    patch_speed: float = 0.03
+    seed: int = 0
+
+
+def as_fog(spec) -> Fog | None:
+    if spec is None or spec is False or isinstance(spec, Fog):
+        return spec or None
+    if isinstance(spec, (int, float)):
+        return Fog(visibility_cm=float(spec))
+    unknown = set(spec) - set(Fog.__dataclass_fields__)
+    if unknown:
+        raise ValueError(f"fog: unknown fields {sorted(unknown)} (known: {', '.join(Fog.__dataclass_fields__)})")
+    return Fog(**spec)
+
+
+@dataclass
 class World:
-    """A floor, objects, and where the drone starts (x, y in cm, yaw in compass degrees)."""
+    """A floor, objects, and where the drone starts (x, y in cm, yaw in compass degrees).
+
+    Objects with ``motion`` move with time: the queries below take ``t``, the seconds since the
+    simulation started."""
     objects: list = field(default_factory=list)
     floor: Floor = field(default_factory=Floor)
     name: str = ""
@@ -95,10 +124,18 @@ class World:
     # camera settings this map is meant for, e.g. {"mode": "mirror"}; Tello(camera_mode=...) wins
     camera: dict = field(default_factory=dict)
     base_dir: Path | None = None  # for relative paths in the map (floor image)
+    fog: Fog | None = None  # fog or smoke (see Fog); None = clear air
     _texture: np.ndarray | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        self.fog = as_fog(self.fog)
+        for o in self.objects:
+            o.motion = as_motion(o.motion)
 
     # ------------------------------------------------------------------ editing
     def add(self, *objs: SimObject) -> World:
+        for o in objs:
+            o.motion = as_motion(o.motion)
         self.objects.extend(objs)
         self._texture = None
         return self
@@ -133,22 +170,50 @@ class World:
         return self._texture
 
     # ------------------------------------------------------------------ queries
-    def primitives(self) -> list:
+    @staticmethod
+    def offset(o: SimObject, t: float) -> np.ndarray:
+        """How far a moving object is from its position at time t (x, y)."""
+        return o.motion.offset(t) if o.motion else np.zeros(2)
+
+    @property
+    def moving(self) -> bool:
+        return any(o.motion for o in self.objects)
+
+    def primitives(self, t: float = 0.0) -> list:
         out = []
         for o in self.objects:
-            out += o.primitives()
+            prims = o.primitives()
+            if o.motion:
+                off = o.motion.offset(t)
+                prims = [moved(p, off) for p in prims]
+            out += prims
         return out
 
-    def surface_height(self, x: float, y: float) -> float:
+    def surface_height(self, x: float, y: float, t: float = 0.0) -> float:
         """Height of whatever is under (x, y): the floor (0) or the top of a box/platform."""
-        return max([o.top_height(x, y) for o in self.objects] + [0.0])
-
-    def collision(self, p, radius: float = 10.0) -> str | None:
+        hs = [0.0]
         for o in self.objects:
-            hit = o.collides(np.asarray(p, float), radius)
+            ox, oy = self.offset(o, t)
+            hs.append(o.top_height(x - ox, y - oy))
+        return max(hs)
+
+    def collision(self, p, radius: float = 10.0, t: float = 0.0) -> str | None:
+        p = np.asarray(p, float)
+        for o in self.objects:
+            ox, oy = self.offset(o, t)
+            hit = o.collides(p - np.array([ox, oy, 0.0]), radius)
             if hit:
                 return hit
         return None
+
+    def ground_velocity(self, x: float, y: float, t: float = 0.0) -> np.ndarray:
+        """Velocity (x, y) of a moving pad or box under (x, y): a drone landed on it moves with it."""
+        for o in self.objects:
+            if o.motion and hasattr(o, "supports"):
+                ox, oy = o.motion.offset(t)
+                if o.supports(x - ox, y - oy):
+                    return o.motion.velocity(t)
+        return np.zeros(2)
 
 
 def _world_from_dict(spec: dict, base_dir: Path | None = None) -> World:
@@ -171,6 +236,11 @@ def _world_from_dict(spec: dict, base_dir: Path | None = None) -> World:
     if "background" in spec:
         world.background = spec["background"]
     world.camera = dict(spec.get("camera") or {})
+    world.fog = as_fog(spec.get("fog"))
+    unknown = set(spec) - {"name", "description", "floor", "start", "objects", "background", "camera", "fog"}
+    if unknown:
+        raise ValueError(f"map: unknown fields {sorted(unknown)} (known: name, description, floor, start, objects, "
+                         f"background, camera, fog)")
     return world
 
 

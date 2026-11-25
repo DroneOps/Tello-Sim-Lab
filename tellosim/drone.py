@@ -97,6 +97,7 @@ class SimDrone:
         self.wind = np.zeros(2)
         self._turn_dir = None
         self.mode = "ground"  # ground, takeoff, air, land, falling
+        self.touchdown = None  # (t since start, x, y) of the last landing or fall to the ground
         self.rc = (0, 0, 0, 0)
         self._rc_hist: collections.deque = collections.deque([(-1e9, (0, 0, 0, 0))])
         # takeoff
@@ -290,15 +291,21 @@ class SimDrone:
                 self.z = max(0.0, self.z + vw[2] * dt)
 
     def _step(self, dt: float, now: float) -> None:
+        mode_before = self.mode
+        self._step_modes(dt, now)
+        if mode_before != "ground" and self.mode == "ground":
+            self.touchdown = (now - self.t0, self.x, self.y)
+
+    def _step_modes(self, dt: float, now: float) -> None:
         m, f = self.m, self.faults
         rc = self._rc_now(now)
         x0, y0, z0 = self.x, self.y, self.z
         if self.mode == "takeoff":
             self._takeoff(dt, now)
         elif self.mode == "land":
-            self.z = max(self.world.surface_height(self.x, self.y), self.z - m.land_speed_cm_s * dt)
-            if self.z <= self.world.surface_height(self.x, self.y) + 0.5:
-                self.mode, self.z = "ground", self.world.surface_height(self.x, self.y)
+            self.z = max(self.world.surface_height(self.x, self.y, now - self.t0), self.z - m.land_speed_cm_s * dt)
+            if self.z <= self.world.surface_height(self.x, self.y, now - self.t0) + 0.5:
+                self.mode, self.z = "ground", self.world.surface_height(self.x, self.y, now - self.t0)
                 self.responses.append("ok")
         elif self.mode == "falling":
             self.z = max(0.0, self.z - 300 * dt)
@@ -357,17 +364,21 @@ class SimDrone:
                 self.z = max(0.0, self.z + f.imu_bad[2] * dt)
         # contact with the floor, boxes, walls...
         if self.mode in ("air", "takeoff") and not (self.mode == "takeoff" and self.z < 15):
-            hit = self.world.collision((self.x, self.y, self.z), RADIUS_CM)
+            hit = self.world.collision((self.x, self.y, self.z), RADIUS_CM, now - self.t0)
             if hit and self.crash is None:
                 self.crash = hit
                 if self.crash_stops:
                     self.mode = "falling"
-            floor = self.world.surface_height(self.x, self.y)
+            floor = self.world.surface_height(self.x, self.y, now - self.t0)
             if self.mode == "air" and self.z <= floor + 0.5:
                 self.mode, self.z = "ground", floor  # touched down: the Tello stops its motors
                 self.crash = self.crash or "touched the floor"
         if self.mode == "air":
             self.min_z_airborne = min(self.min_z_airborne, self.z)
+        if self.mode == "ground" and self.flight_time > 0:  # landed on a moving pad or box: it carries the drone
+            v = self.world.ground_velocity(self.x, self.y, now - self.t0)
+            self.x += float(v[0]) * dt
+            self.y += float(v[1]) * dt
         # bookkeeping
         if self.mode != "ground":
             self.temp += m.temp_c_per_min / 60 * dt
@@ -388,7 +399,7 @@ class SimDrone:
     # ------------------------------------------------------------------ sensors
     def _update_state(self, now: float) -> None:
         m, f = self.m, self.faults
-        floor = self.world.surface_height(self.x, self.y)
+        floor = self.world.surface_height(self.x, self.y, now - self.t0)
         tof = int(self.z - floor + 10 + self.rng.normal(0, m.tof_noise_cm)) if self.z > floor + 0.5 else 10
         if self.tof_garbage is not None:
             tof = self.tof_garbage

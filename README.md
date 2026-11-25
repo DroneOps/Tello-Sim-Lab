@@ -49,7 +49,8 @@ simulator.
 
 ```bash
 python -m tellosim.run --world tmr_gates --record run.mp4 my_program.py
-python -m tellosim.run --world tmr_landing --keys t@4,l@45 tests/test_tracking.py   # presses t, then l
+python -m tellosim.run --world tmr_landing --keys t@4,l@60 tests/test_tracking.py   # presses t, then l
+python -m tellosim.run --world tmr_gates --fog '{"visibility_cm": 600, "patches": 0.5}' my_program.py   # with smoke
 ```
 
 At the end it prints what really happened: crashes, where it ended, gates flown through. How, and
@@ -118,6 +119,8 @@ Results in the simulator and how to move them to the real drone:
 |---|---|
 | run my existing djitellopy program, without changing it | [docs/your-code.md](docs/your-code.md) |
 | build my own track (lines, markers, gates, boxes, walls, my floor) | [docs/maps.md](docs/maps.md) |
+| a platform that moves, fog or smoke | [docs/maps.md](docs/maps.md#moving-objects), [fog](docs/maps.md#fog-and-smoke) |
+| check that my map is right (textures, collisions, sizes) | `python tools/check_maps.py my_track.yaml` ([docs/maps.md](docs/maps.md#check-your-map)) |
 | use another Tello's calibration, the forward camera or a mirror | [docs/camera.md](docs/camera.md) |
 | make the simulated drone behave like MY drone | [docs/drone-model.md](docs/drone-model.md) |
 | test what happens when things go wrong | [docs/faults.md](docs/faults.md) |

@@ -9,6 +9,8 @@ description: >
   that looks for one closed rectangle loses it (see docs/your-code.md).
 floor: {type: lab_grid, size_cm: [800, 2000], center: [0, 800]}
 start: {position: [0, 0], yaw_deg: 0}
+# The real TMR will have fog or smoke. Uncomment (or run with --fog 400):
+# fog: {visibility_cm: 400, patches: 0.5}
 objects:
   - {type: gate, name: gate1, position: [0, 500, 90], width_cm: 110, height_cm: 110, bar_cm: 10, color: green, leg_color: gray}
   - {type: gate, name: gate2, position: [10, 1000, 95], width_cm: 110, height_cm: 110, bar_cm: 10, color: green, leg_color: gray}

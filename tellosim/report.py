@@ -5,7 +5,7 @@ import math
 
 import numpy as np
 
-from .objects import FloorLine, Gate, compass
+from .objects import FloorLine, Gate, LandingPad, compass
 
 
 def gates_crossed(world, path) -> list[tuple[str, bool]]:
@@ -55,4 +55,12 @@ def summary(sim, path) -> list[str]:
     ld = line_distance(sim.world, [p for p in path if p[2] > 20])
     if ld:
         lines.append(f"distance to the line: median {ld[0]:.0f} cm, max {ld[1]:.0f} cm")
+    if d.mode == "ground" and d.flight_time > 0 and d.touchdown:
+        t, tx, ty = d.touchdown  # where the pad was when the drone touched down
+        for pad in [o for o in sim.world.objects if isinstance(o, LandingPad)]:
+            ox, oy = sim.world.offset(pad, t)
+            x, y = tx - ox, ty - oy
+            dist = math.hypot(x - pad.position[0], y - pad.position[1])
+            lines.append(f"landing pad {pad.name or ''}: touched down {dist:.0f} cm from its center"
+                         f" ({'on it' if pad.supports(x, y) else 'off it'}), at {t:.0f} s".replace("pad :", "pad:"))
     return lines

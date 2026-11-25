@@ -220,3 +220,95 @@ def test_gate_leg_color():
     polys = Gate(position=(0, 300, 100), color="green", leg_color="gray").primitives()
     assert [q.color for q in polys[-2:]] == [bgr("gray")] * 2
     assert polys[0].color == bgr("green")
+
+
+# ----------------------------------------------------------------------------- moving objects, fog, map checks
+def test_motion_back_and_forth_at_constant_speed():
+    from tellosim.objects import Motion
+    m = Motion(direction_deg=90, distance_cm=200, speed_cm_s=10, start_s=10)
+    assert np.allclose(m.offset(5), 0) and np.allclose(m.offset(15), (50, 0), atol=1e-6)
+    assert np.allclose(m.offset(20), (100, 0), atol=1e-6) and np.allclose(m.offset(40), (-100, 0), atol=1e-6)
+    assert np.allclose(m.velocity(17), (10, 0), atol=1e-6) and np.allclose(m.velocity(23), (-10, 0), atol=1e-6)
+    once = Motion(direction_deg=0, distance_cm=50, speed_cm_s=5, back_and_forth=False)
+    assert np.allclose(once.offset(5), (0, 25), atol=1e-6) and np.allclose(once.offset(60), (0, 50), atol=1e-6)
+
+
+def test_moving_pad_is_seen_where_it_is():
+    t = Tello(world="tmr_landing", realtime=False)
+    r = t.sim.renderer
+
+    def marker_px(x, time):
+        img = cv2.flip(r.render(x, -20, 80, 0, t=time), 0)
+        found = [c for i, c in tellolab_detect(img) if i == 0]
+        return found[0].mean(axis=0) if found else None
+    still = marker_px(0, 0.0)
+    assert still is not None
+    assert marker_px(0, 15.0) is None  # 15 s: it moved 50 cm to the right, out of view
+    moved = marker_px(50, 15.0)  # ...and it is there
+    assert moved is not None and np.linalg.norm(moved - still) < 3
+
+
+def tellolab_detect(img):
+    from tellolab.vision import detect_markers
+    return detect_markers(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), "DICT_6X6_100")
+
+
+def test_landed_drone_rides_a_moving_platform():
+    from tellosim import LandingPad
+    w = World(objects=[LandingPad(position=(0, 100), size_cm=60, height_cm=15,
+                                  motion={"direction_deg": 90, "distance_cm": 400, "speed_cm_s": 10})])
+    clk = SimClock()
+    d = SimDrone(w, load_model("ideal"), clock=clk)
+    d.command("takeoff")
+    run(d, clk, 6)
+    d.x, d.y = w.offset(w.objects[0], clk.t - d.t0)[0], 100.0  # over the pad
+    d.command("land")
+    run(d, clk, 4)
+    assert d.mode == "ground" and abs(d.z - 15) < 1  # on top of it
+    x0 = d.x
+    run(d, clk, 3)
+    assert 25 < d.x - x0 < 35  # 3 s at 10 cm/s, on the pad
+    assert d.crash is None
+
+
+def test_fog_hides_far_things_more():
+    w = load_map({"objects": [{"type": "panel", "position": [-60, 150, 80], "width_cm": 60, "height_cm": 60,
+                               "color": "black"},
+                              {"type": "panel", "position": [60, 600, 80], "width_cm": 60, "height_cm": 60,
+                                "color": "black"}],
+                  "fog": {"visibility_cm": 500, "color": [200, 200, 200]}})
+    t = Tello(world=w, realtime=False, noise_std=0, blur_sigma=0)
+    cam = t.sim.camera
+    img = t.sim.renderer.render(0, 0, 80, 0)
+
+    def px_of(p):
+        r, d, f = cam.basis(0)
+        pc = (np.array(p) - np.array([0, 0, 80])) @ np.stack([r, d, f]).T
+        u, v = cam.project(pc[None])[0]
+        return img[int(v), int(u)].astype(int)
+    near, far = px_of((-60, 150, 80)), px_of((60, 600, 80))
+    assert near.mean() < far.mean() < 200  # both fade towards the fog, the far one more
+    assert abs(near.mean() - 200 * (1 - math.exp(-3 * 162 / 500))) < 15  # exp(-3 d / visibility)
+    clear = Tello(world=w, realtime=False, fog=False, noise_std=0, blur_sigma=0)
+    assert clear.sim.world.fog is None
+
+
+def test_round_pad_has_no_square():
+    from tellosim import LandingPad
+    p = LandingPad(position=(0, 0), size_cm=60, shape="circle", height_cm=20)
+    img = p._image()
+    assert img.shape[2] == 4 and img[2, 2, 3] == 0 and img[img.shape[0] // 2, img.shape[1] // 2, 3] == 255
+    corner = np.array([25.0, 25.0, 10.0])  # inside the square, outside the circle
+    assert p.collides(corner, 3) is None and p.top_height(25, 25) == 0
+    assert p.collides(np.array([0.0, 0.0, 10.0]), 3) is not None
+
+
+def test_builtin_maps_pass_the_checks():
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location("check_maps", Path(__file__).parents[1] / "tools" / "check_maps.py")
+    cm = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cm)
+    for name in tellosim.builtin_maps():
+        rep = cm.check_map(name, None)
+        assert rep.fails == 0, "\n".join([name] + rep.lines)
