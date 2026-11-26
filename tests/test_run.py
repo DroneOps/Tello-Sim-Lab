@@ -80,3 +80,12 @@ def test_batch_runs_every_seed(tmp_path):
     assert "2 runs" in out
     s = json.loads((tmp_path / "b" / "summary.json").read_text())
     assert [r["seed"] for r in s["runs"]] == [1, 2] and s["total"]["errors"] == 0
+
+
+def test_run_glare_option(tmp_path):
+    prog = tmp_path / "prog.py"
+    prog.write_text("from djitellopy import Tello\nt = Tello()\nprint('LIGHTS', len(t.sim.world.lights) > 0, "
+                    "bool(t.sim.world.objects[0].glossy_surfaces()))\n")
+    out = subprocess.run([sys.executable, "-m", "tellosim.run", "--headless", "--world", "tmr_landing",
+                          "--glare", "0.7", str(prog)], capture_output=True, text=True, timeout=60).stdout
+    assert "LIGHTS True True" in out

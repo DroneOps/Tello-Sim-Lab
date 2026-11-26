@@ -154,6 +154,52 @@ Any object except a line can move at constant speed along a straight line, with 
 - In Python: `LandingPad(..., motion={"direction_deg": 90, "speed_cm_s": 10})`, and
   `world.offset(obj, t)` says where it is at `t` seconds.
 
+## Glossy markers and lamps
+
+A marker in a plastic sleeve or laminated reflects the room's lamps. On the real drone this was a
+real problem (TMR_Landing, Oct 2026): a white patch over the marker, and where it falls on the
+black border the detector does not find the marker at all, although the rest looks fine.
+
+```yaml
+lights:                              # the room's lamps
+  - {position: [0, 0, 270], size_cm: 30}
+  - {position: [240, 0, 270], size_cm: 30}
+objects:
+  - type: landing_pad
+    position: [0, -20]
+    marker: {dictionary: DICT_6X6_100, id: 0, size_cm: 10, gloss: 0.7}   # only the marker's card
+  - type: marker
+    id: 3
+    position: [100, 100]
+    gloss: {strength: 0.7, roughness: 0.04}
+```
+
+| Field | Default | Meaning |
+|---|---|---|
+| `lights[].position` | `[0, 0, 270]` | where the lamp is, in cm (z = its height) |
+| `lights[].size_cm` | 30 | its diameter: a ceiling panel ~60, the width of a tube ~30, a bulb ~10. Bigger = a bigger reflection |
+| `lights[].strength` | 1 | 0..1 |
+| `gloss` or `gloss.strength` | 0.7 | how bright the reflection gets: 0.7 turns black into light gray (what the lab photo showed); 1 = white |
+| `gloss.roughness` | 0.04 | how blurred, in radians: glossy laminate ~0.03–0.05, a matte-ish sleeve ~0.15 |
+
+`gloss` goes on a `marker` (its printed card, margin included), on a `landing_pad` (its whole
+top) or only on a pad's marker (`marker: {..., gloss: ...}`).
+
+- **How:** for every pixel of a glossy surface, the camera's ray is mirrored on it and compared
+  with the direction to each lamp. Where they line up, the surface shows the lamp, blurred by
+  the roughness. So the reflection is where the real one would be, **moves when the drone
+  moves**, and is bigger when the drone is higher.
+- **Where to expect it:** looking straight down from height h, with a lamp at height H, the
+  reflection falls on the floor at h/(h+H) of the way from below the drone to below the lamp.
+  So it is on the marker only when the drone is almost between the marker and a lamp: at 30 cm
+  that is up to ~60 cm from below the lamp, at 1 m only ~20 cm.
+- **Without editing the map:** `--glare 0.7` (or `Tello(glare=0.7)`) makes every marker glossy
+  and, if the map has no `lights`, puts a grid of ceiling lamps every 240 cm at 270 cm, one
+  right above the start. `--glare '{"strength": 0.7, "lamp_height_cm": 300,
+  "lamp_spacing_cm": 200, "lamp_size_cm": 60}'` describes your room.
+- It costs ~5–15 ms per frame while a reflection is on screen, nothing otherwise.
+- Not simulated: shadows (the drone's own shadow over the reflection), windows.
+
 ## Fog and smoke
 
 The real TMR will have fog or smoke. Add it to the map, or when you run:

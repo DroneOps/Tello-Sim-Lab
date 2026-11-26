@@ -116,8 +116,10 @@ All in cm:
 
 ## What it does NOT simulate
 
-- **Motion blur, reflections, glare, a dirty mirror,** and real lighting (it has flat colors
-  with noise).
+- **Motion blur, a dirty mirror,** and real lighting (it has flat colors with noise).
+- **Reflections, only some:** the lamps of the room on glossy surfaces (`gloss`, `lights`,
+  `--glare`; [maps.md](maps.md#glossy-markers-and-lamps)). Not shadows (also not the drone's own
+  shadow over the reflection), nor windows or the drone reflected in them.
 - **WiFi drops,** unless you turn on `video_dropouts` in [faults.md](faults.md). Lost commands
   are not simulated.
 - **The real speed with a mirror clip.** The model gives ~14.5 cm/s with rc 15; with the mirror

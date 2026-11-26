@@ -18,7 +18,7 @@ import cv2
 import numpy as np
 import yaml
 
-from .objects import SimObject, as_motion, bgr, make_object, moved
+from .objects import LandingPad, Marker, SimObject, as_gloss, as_motion, bgr, make_object, moved
 
 MAPS_DIR = Path(__file__).resolve().parent / "maps"
 
@@ -110,6 +110,73 @@ def as_fog(spec) -> Fog | None:
 
 
 @dataclass
+class Light:
+    """A lamp of the room (``lights:`` in a map). Glossy surfaces (``gloss``) reflect it.
+
+    position: [x, y, z] in cm (z = its height, e.g. 270 for a lab ceiling). size_cm: its diameter
+    (a ceiling panel ~60, the width of a tube ~30, a bulb ~10): bigger = bigger reflection.
+    strength: 0..1."""
+    position: tuple = (0.0, 0.0, 270.0)
+    size_cm: float = 30.0
+    strength: float = 1.0
+
+
+def as_lights(spec) -> list:
+    if not spec:
+        return []
+    out = []
+    for item in spec:
+        if isinstance(item, Light):
+            out.append(item)
+            continue
+        unknown = set(item) - set(Light.__dataclass_fields__)
+        if unknown:
+            raise ValueError(f"lights: unknown fields {sorted(unknown)} (known: {', '.join(Light.__dataclass_fields__)})")
+        item = dict(item)
+        if "position" in item:
+            item["position"] = tuple(float(v) for v in item["position"])
+            if len(item["position"]) != 3:
+                raise ValueError("lights: position is [x, y, z] (z = the lamp's height in cm)")
+        out.append(Light(**item))
+    return out
+
+
+def ceiling_lights(world: "World", height_cm: float = 270.0, spacing_cm: float = 240.0,
+                   size_cm: float = 30.0) -> list:
+    """A grid of ceiling panels over the whole floor, one right above the start (a typical lab)."""
+    fl = world.floor
+    sx, sy = world.start[0], world.start[1]
+    nx = int(fl.size_cm[0] / 2 // spacing_cm) + 1
+    ny = int(fl.size_cm[1] / 2 // spacing_cm) + 1
+    return [Light((sx + i * spacing_cm, sy + j * spacing_cm, height_cm), size_cm)
+            for i in range(-nx, nx + 1) for j in range(-ny, ny + 1)
+            if abs(sx + i * spacing_cm - fl.center[0]) <= fl.size_cm[0] / 2
+            and abs(sy + j * spacing_cm - fl.center[1]) <= fl.size_cm[1] / 2]
+
+
+LAMP_KEYS = {"lamp_height_cm": "height_cm", "lamp_spacing_cm": "spacing_cm", "lamp_size_cm": "size_cm"}
+
+
+def apply_glare(world: "World", glare) -> None:
+    """``glare=0.7`` (or ``{strength, roughness, lamp_height_cm, lamp_spacing_cm, lamp_size_cm}``):
+    every marker in the world (also the ones on pads) gets laminated (see as_gloss), and if the
+    map has no ``lights``, the room gets a grid of ceiling lamps (``ceiling_lights``; the lamp_*
+    fields set its height, spacing and lamp size). ``glare=False``: nothing is glossy."""
+    lamps = {}
+    if isinstance(glare, dict):
+        glare = dict(glare)
+        lamps = {LAMP_KEYS[k]: float(glare.pop(k)) for k in list(glare) if k in LAMP_KEYS}
+    g = as_gloss(glare)
+    for o in world.objects:
+        if isinstance(o, Marker):
+            o.gloss = g
+        elif isinstance(o, LandingPad) and o.marker:
+            o.marker = {**o.marker, "gloss": g}
+    if g and not world.lights:
+        world.lights = ceiling_lights(world, **lamps)
+
+
+@dataclass
 class World:
     """A floor, objects, and where the drone starts (x, y in cm, yaw in compass degrees).
 
@@ -125,10 +192,12 @@ class World:
     camera: dict = field(default_factory=dict)
     base_dir: Path | None = None  # for relative paths in the map (floor image)
     fog: Fog | None = None  # fog or smoke (see Fog); None = clear air
+    lights: list = field(default_factory=list)  # the room's lamps (see Light), for glossy surfaces
     _texture: np.ndarray | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         self.fog = as_fog(self.fog)
+        self.lights = as_lights(self.lights)
         for o in self.objects:
             o.motion = as_motion(o.motion)
 
@@ -237,10 +306,11 @@ def _world_from_dict(spec: dict, base_dir: Path | None = None) -> World:
         world.background = spec["background"]
     world.camera = dict(spec.get("camera") or {})
     world.fog = as_fog(spec.get("fog"))
-    unknown = set(spec) - {"name", "description", "floor", "start", "objects", "background", "camera", "fog"}
+    world.lights = as_lights(spec.get("lights"))
+    unknown = set(spec) - {"name", "description", "floor", "start", "objects", "background", "camera", "fog", "lights"}
     if unknown:
         raise ValueError(f"map: unknown fields {sorted(unknown)} (known: name, description, floor, start, objects, "
-                         f"background, camera, fog)")
+                         f"background, camera, fog, lights)")
     return world
 
 

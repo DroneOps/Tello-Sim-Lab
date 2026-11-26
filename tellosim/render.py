@@ -7,7 +7,12 @@
    colored polygons (gates, boxes, walls, panels) clipped against the near plane.
    Things lying on the floor (markers, flat pads) are drawn first, lowest first; a picture on a
    surface (a marker on a wall or on a pad) is drawn right after that surface.
-3. Fog or smoke (``world.fog``): every pixel fades towards the fog color with its distance.
+3. Glare: glossy surfaces (``gloss``, e.g. a laminated marker) reflect the room's lamps
+   (``world.lights``). For each pixel of the surface its ray is mirrored on the surface and
+   compared with the direction to each lamp: where they line up the surface shows the lamp,
+   blurred by the surface's roughness. So the reflection is where the real one would be, moves
+   when the drone moves, and washes black cells out to gray (what breaks marker detection).
+3b. Fog or smoke (``world.fog``): every pixel fades towards the fog color with its distance.
 4. Lens blur and sensor noise, then the mirror flip if the camera has one.
 
 Objects with ``motion`` are drawn where they are at time ``t`` (``render(..., t=...)``).
@@ -97,6 +102,8 @@ class Renderer:
                         break
             if best is not None:
                 self._host[i] = best
+        self._glossy = [(o, np.array(c, float), s, rough) for o in self.world.objects
+                        for c, s, rough in o.glossy_surfaces()]
         self._flat = [verts(p)[:, 2].max() < FLAT_CM for p in prims]
         self._low = [float(verts(p)[:, 2].mean()) for p in prims]
         self._prims = prims
@@ -177,6 +184,8 @@ class Renderer:
                 self._draw(img, dp, dpc, depth)
                 j = next((k for k, q in enumerate(prims) if q is dp), None)
                 stack += decals.get(j, []) if j is not None else []
+        if self._glossy and self.world.lights:
+            self._glare(img, O, R, t)
         if fog is not None:
             img = self._apply_fog(img, depth, fog, t)
         if cam.blur_sigma > 0:
@@ -191,6 +200,83 @@ class Renderer:
             self._draw_quad(img, p, pc, depth)
         else:
             self._draw_poly(img, p, pc, depth)
+
+    # ------------------------------------------------------------------ glare
+    def _glare(self, img: np.ndarray, O: np.ndarray, R: np.ndarray, t: float) -> None:
+        """Brighten glossy surfaces where they mirror a lamp (see the module docstring)."""
+        H_img, W_img = img.shape[:2]
+        r, d, f = R
+        for obj, corners, strength, rough in self._glossy:
+            if obj.motion:
+                off = obj.motion.offset(t)
+                corners = corners + np.array([off[0], off[1], 0.0])
+            c0 = corners[0]
+            n = np.cross(corners[1] - c0, corners[3] - c0)
+            n = n / (np.linalg.norm(n) + 1e-9)
+            if (O - c0) @ n < 0:
+                n = -n
+            if (O - c0) @ n < 1.0:
+                continue  # seen edge-on or from behind
+            lights = [L for L in self.world.lights if self._mirrors(O, corners, n, L, rough)]
+            if not lights:
+                continue
+            pc = (corners - O) @ R.T
+            if (pc[:, 2] < 10).any():
+                continue
+            uv = self.cam.project(pc)
+            if uv is None or (np.abs(uv) > 5000).any():
+                continue
+            x0, y0 = max(int(np.floor(uv[:, 0].min())), 0), max(int(np.floor(uv[:, 1].min())), 0)
+            x1, y1 = min(int(np.ceil(uv[:, 0].max())) + 1, W_img), min(int(np.ceil(uv[:, 1].max())) + 1, H_img)
+            if x1 <= x0 or y1 <= y0:
+                continue
+            # the reflection is smooth: compute it on a coarser grid (~ 1 point per 4 px when big)
+            area = (x1 - x0) * (y1 - y0)
+            step = 4 if area > 60_000 else 2 if area > 8_000 else 1
+            rays = self.cam.rays()[y0:y1:step, x0:x1:step]
+            r32, d32, f32, O32, n32 = (np.asarray(v, np.float32) for v in (r, d, f, O, n))
+            wd = rays[..., :1] * r32 + rays[..., 1:2] * d32 + f32  # world direction of each pixel's ray
+            dn = wd @ n32
+            s = np.float32((c0 - O) @ n) / np.where(np.abs(dn) < 1e-9, np.float32(1e-9), dn)
+            S = O32 + s[..., None] * wd  # where each ray hits the surface's plane
+            v = wd / np.linalg.norm(wd, axis=-1, keepdims=True)
+            refl = v - 2 * (v @ n32)[..., None] * n32  # the ray, mirrored on the surface
+            light = np.zeros(s.shape, np.float32)
+            for L in lights:
+                to_l = np.asarray(L.position, np.float32) - S
+                dist = np.linalg.norm(to_l, axis=-1)
+                ang = np.arccos(np.clip((refl * to_l).sum(-1) / np.maximum(dist, 1e-6), -1, 1))
+                # inside the lamp's disk: full reflection; outside it, the roughness blurs it
+                excess = np.maximum(0.0, ang - np.arctan2(L.size_cm / 2, dist))
+                light += L.strength * np.exp(-0.5 * (excess / max(rough, 1e-3)) ** 2)
+            light = np.clip(light * strength, 0, 1).astype(np.float32)
+            if step > 1:
+                light = cv2.resize(light, (x1 - x0, y1 - y0), interpolation=cv2.INTER_LINEAR)
+            light = light[: y1 - y0, : x1 - x0]
+            mask = np.zeros((y1 - y0, x1 - x0), np.uint8)
+            cv2.fillPoly(mask, [np.round((uv - [x0, y0]) * 16).astype(np.int32)], 255, cv2.LINE_AA, 4)
+            a = (light * (mask.astype(np.float32) / 255))[..., None]
+            roi = img[y0:y1, x0:x1].astype(np.float32)
+            img[y0:y1, x0:x1] = (roi + a * (255.0 - roi)).astype(np.uint8)
+
+    @staticmethod
+    def _mirrors(O: np.ndarray, corners: np.ndarray, n: np.ndarray, L, rough: float) -> bool:
+        """Can the camera at O see lamp L mirrored on this surface (with some margin for the
+        lamp's size and the blur)? Where the exact reflection falls: the line from O to the lamp
+        mirrored through the surface's plane, where it crosses the plane."""
+        c0 = corners[0]
+        P_l = np.asarray(L.position, float)
+        if (P_l - c0) @ n <= 0:
+            return False  # the lamp is behind the surface
+        mirrored = P_l - 2 * ((P_l - c0) @ n) * n
+        u = ((c0 - O) @ n) / ((mirrored - O) @ n)
+        P = O + u * (mirrored - O)
+        margin = L.size_cm / 2 + 3 * rough * np.linalg.norm(P_l - P) + 2.0
+        e1, e2 = corners[1] - c0, corners[3] - c0
+        a = (P - c0) @ e1 / (e1 @ e1)
+        b = (P - c0) @ e2 / (e2 @ e2)
+        ma, mb = margin / np.linalg.norm(e1), margin / np.linalg.norm(e2)
+        return -ma <= a <= 1 + ma and -mb <= b <= 1 + mb
 
     # ------------------------------------------------------------------ fog
     def _smoke(self, fog, t: float, size: tuple[int, int]) -> np.ndarray:

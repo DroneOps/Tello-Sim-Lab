@@ -109,6 +109,23 @@ class Motion:
         return v * compass(self.direction_deg)[:2]
 
 
+# ---------------------------------------------------------------------------------- gloss
+def as_gloss(spec) -> dict | None:
+    """A glossy (laminated, plastic-covered) surface: it reflects the room's lamps (``lights``).
+
+    ``gloss: 0.7`` or ``gloss: {strength: 0.7, roughness: 0.04}``. strength: how bright the
+    reflection of a lamp gets (0..1; 1 = white). roughness: how blurred (radians); glossy laminate
+    ~0.03-0.05, a matte-ish plastic sleeve ~0.15. Matte paper: leave gloss out."""
+    if spec is None or spec is False:
+        return None
+    if isinstance(spec, (int, float)):
+        spec = {"strength": float(spec)}
+    unknown = set(spec) - {"strength", "roughness"}
+    if unknown:
+        raise ValueError(f"gloss: unknown fields {sorted(unknown)} (known: strength, roughness)")
+    return {"strength": float(spec.get("strength", 0.7)), "roughness": float(spec.get("roughness", 0.04))}
+
+
 def as_motion(spec) -> Motion | None:
     if spec is None or isinstance(spec, Motion):
         return spec
@@ -143,6 +160,10 @@ class SimObject:
     def top_height(self, x: float, y: float) -> float:
         """Height (cm) of this object's top surface under (x, y), for the ToF sensor; 0 if none."""
         return 0.0
+
+    def glossy_surfaces(self) -> list:
+        """Flat glossy surfaces that reflect the lamps: [(corners (4, 3), strength, roughness)]."""
+        return []
 
     def collides(self, p: np.ndarray, radius: float) -> str | None:
         """A message if a drone of this radius at point p touches the object."""
@@ -241,6 +262,7 @@ class Marker(SimObject):
     rotation_deg: float = 0.0
     facing_deg: float = 180.0
     wear: object = None
+    gloss: object = None  # laminated / in a plastic sleeve: it reflects the lamps (see as_gloss)
     _img: np.ndarray | None = field(default=None, repr=False)
 
     def _image(self) -> tuple[np.ndarray, float]:
@@ -274,6 +296,13 @@ class Marker(SimObject):
         if self.mount == "floor":
             corners[:, 2] += 0.05  # just above the floor texture
         return [TexturedQuad(corners, img, np.cross(right, up))]
+
+    def glossy_surfaces(self) -> list:
+        g = as_gloss(self.gloss)
+        if not g:
+            return []
+        # the whole printed card (marker and its white margin) is under the laminate
+        return [(self.primitives()[0].corners, g["strength"], g["roughness"])]
 
 
 @dataclass
@@ -324,6 +353,7 @@ class LandingPad(SimObject):
     height_cm: float = 0.0
     rotation_deg: float = 0.0
     side_color: object = "gray"
+    gloss: object = None  # the whole top is glossy (see as_gloss); for only the marker: marker: {gloss: ...}
 
     def _image(self) -> np.ndarray:
         s = 4  # px per cm
@@ -378,11 +408,24 @@ class LandingPad(SimObject):
                     normal = -normal
                 prims.append(SolidPoly(face, bgr(self.side_color), normal))
         if self.marker:
-            m = Marker(id=int(self.marker.get("id", 0)), dictionary=self.marker.get("dictionary", "DICT_APRILTAG_25h9"),
-                       size_cm=float(self.marker.get("size_cm", self.size_cm * 0.5)),
-                       position=(c[0], c[1], self.height_cm + 0.1), rotation_deg=self.rotation_deg)
-            prims += m.primitives()
+            prims += self._marker().primitives()
         return prims
+
+    def _marker(self) -> Marker:
+        c, _, _ = self._axes()
+        return Marker(id=int(self.marker.get("id", 0)), dictionary=self.marker.get("dictionary", "DICT_APRILTAG_25h9"),
+                      size_cm=float(self.marker.get("size_cm", self.size_cm * 0.5)),
+                      position=(c[0], c[1], self.height_cm + 0.1), rotation_deg=self.rotation_deg,
+                      gloss=self.marker.get("gloss"))
+
+    def glossy_surfaces(self) -> list:
+        out = []
+        g = as_gloss(self.gloss)
+        if g:
+            out.append((self.primitives()[0].corners, g["strength"], g["roughness"]))
+        if self.marker:
+            out += self._marker().glossy_surfaces()
+        return out
 
     def top_height(self, x: float, y: float) -> float:
         if self.height_cm <= 0:

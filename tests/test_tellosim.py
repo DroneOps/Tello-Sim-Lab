@@ -337,3 +337,50 @@ def test_motion_pauses_at_each_end():
     assert m.velocity(6.0)[0] == 0 and m.velocity(6.6)[0] > 0
     xs = [m.offset(t)[0] for t in np.arange(0, 40, 0.05)]
     assert abs(max(xs) - 22.5) < 1e-6 and abs(min(xs) + 22.5) < 1e-6
+
+
+# ---------------------------------------------------------------------------------- glare
+def _glare_world(lamp_xy, gloss=0.7):
+    from tellosim.objects import Marker
+    from tellosim.world import Light, World
+    w = World(objects=[Marker(id=0, dictionary="DICT_6X6_100", size_cm=20, gloss=gloss)])
+    w.lights = [Light(position=(lamp_xy[0], lamp_xy[1], 270), size_cm=30)]
+    return w
+
+
+def test_no_glare_without_gloss():
+    """Lamps alone change nothing: only glossy surfaces reflect them (old maps look the same)."""
+    from tellosim.camera import Camera
+    from tellosim.render import Renderer
+    cam = Camera.load("lab_tello", mode="mirror", noise_std=0.0)
+    plain = Renderer(_glare_world((0, 0), gloss=None), cam).render(0, 15, 60, 0)
+    lit = _glare_world((0, 0), gloss=None)
+    assert np.array_equal(plain, Renderer(lit, cam).render(0, 15, 60, 0))
+
+
+def test_glare_appears_where_the_lamp_is_mirrored():
+    from tellosim.camera import Camera
+    from tellosim.render import Renderer
+    cam = Camera.load("lab_tello", mode="mirror", noise_std=0.0)
+    matte = Renderer(_glare_world((0, 0), gloss=None), cam).render(0, 0, 60, 0).astype(int)
+    above = Renderer(_glare_world((0, 0)), cam).render(0, 0, 60, 0).astype(int)
+    far = Renderer(_glare_world((600, 0)), cam).render(0, 0, 60, 0).astype(int)
+    brighter = (above - matte).max(axis=2) > 40
+    assert brighter.sum() > 200                              # a lamp above: a bright patch on the marker
+    assert (above >= matte - 2).all()                        # it only adds light
+    assert ((far - matte).max(axis=2) > 40).sum() == 0       # a lamp far away is not mirrored into the camera
+
+
+def test_glare_in_maps_and_apply_glare():
+    from tellosim.world import apply_glare, load_map
+    w = load_map({"objects": [{"type": "landing_pad", "marker": {"dictionary": "DICT_6X6_100", "id": 0,
+                                                                  "size_cm": 10, "gloss": 0.8}}],
+                  "lights": [{"position": [0, 0, 250], "size_cm": 20}]})
+    assert len(w.lights) == 1 and w.objects[0].glossy_surfaces()[0][1] == 0.8
+    with pytest.raises(ValueError):
+        load_map({"lights": [{"position": [0, 0, 250], "colour": "white"}]})
+    w = load_map("tmr_landing")
+    assert not w.lights and not w.objects[0].glossy_surfaces()
+    apply_glare(w, {"strength": 0.6, "lamp_height_cm": 300, "lamp_spacing_cm": 200})
+    assert w.lights and all(L.position[2] == 300 for L in w.lights)
+    assert w.objects[0].glossy_surfaces()[0][1] == 0.6

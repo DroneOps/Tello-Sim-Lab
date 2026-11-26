@@ -14,6 +14,8 @@ Options:
   --camera-set mirror_axis=h                          any camera field (docs/camera.md); repeat it
   --faults '{"takeoff": "no_ok"}'                     faults as JSON, or a .json file (docs/faults.md)
   --fog 300  or  --fog '{"visibility_cm": 300, "patches": 0.6}'   fog or smoke, or a .json file (docs/maps.md)
+  --glare 0.9  or  --glare '{"strength": 0.9, "roughness": 0.06}'  laminated markers that reflect the
+                   ceiling lamps (docs/maps.md#glossy-markers-and-lamps)
   --headless       no windows: cv2.imshow does nothing and cv2.waitKey returns -1 (no keys,
                    except the ones given with --keys)
   --viewer         also show the map from above
@@ -106,7 +108,7 @@ def _press_keys(keys: list[tuple[str, float]]) -> None:
 def _write_report(a, runs: list[dict]) -> None:
     """--report-json: the run's settings and, for each simulated Tello, what really happened."""
     report = {"script": a.script, "script_args": a.script_args, "world": a.world, "model": a.model,
-              "seed": a.seed, "fog": a.fog, "faults": a.faults, "drones": runs}
+              "seed": a.seed, "fog": a.fog, "glare": a.glare, "faults": a.faults, "drones": runs}
     try:
         with open(a.report_json, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2)
@@ -141,6 +143,7 @@ def main() -> None:
     ap.add_argument("--faults", default=None, help="JSON, e.g. '{\"takeoff\": \"collapse\"}'")
     ap.add_argument("--keys", default="", help="key@seconds,... e.g. t@4,q@40")
     ap.add_argument("--fog", default=None, help="visibility in cm, or JSON with the Fog fields")
+    ap.add_argument("--glare", default=None, help="gloss strength of every marker, or JSON {strength, roughness}")
     ap.add_argument("--headless", action="store_true")
     ap.add_argument("--viewer", action="store_true")
     ap.add_argument("--record", default=None)
@@ -160,6 +163,8 @@ def main() -> None:
         options["faults"] = _json_arg(a.faults)
     if a.fog:
         options["fog"] = _json_arg(a.fog)
+    if a.glare:
+        options["glare"] = _json_arg(a.glare)
     _install_fake_djitellopy(options, a.viewer, a.record)
     if a.headless:
         _headless()
@@ -177,7 +182,8 @@ def main() -> None:
     sys.argv = [script, *a.script_args]
     sys.path.insert(0, os.path.dirname(script))
     print(f"[tellosim.run] {os.path.basename(script)} in the simulator: world {a.world}, model {a.model}"
-          + (f", camera {a.camera_mode}" if a.camera_mode else "") + (f", fog {a.fog}" if a.fog else ""), flush=True)
+          + (f", camera {a.camera_mode}" if a.camera_mode else "") + (f", fog {a.fog}" if a.fog else "")
+          + (f", glare {a.glare}" if a.glare else ""), flush=True)
     try:
         runpy.run_path(script, run_name="__main__")
     except (KeyboardInterrupt, SystemExit):

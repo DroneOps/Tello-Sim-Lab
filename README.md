@@ -175,8 +175,9 @@ print(tello.sim.pose())                        # the TRUE position, which the re
 | ToF reads height + 10 cm, garbage mid-flip; `h` unreliable | yes | sensors in `drone.py` |
 | video delay | ~170 ms | `video_delay_s` |
 | standard Tello answers `unknown command` to `sdk?` and `sn?` | yes | `tello.py` |
+| a laminated marker reflects the ceiling lamps, and the reflection on its black border stops it from being detected | yes (TMR_Landing's laminated ArUco) | `--glare`, `gloss` + `lights` in a map |
 
-And what it does **not** reproduce: motion blur, reflections, a dirty mirror, WiFi drops (unless
+And what it does **not** reproduce: motion blur, reflections other than lamps on glossy surfaces, a dirty mirror, WiFi drops (unless
 you turn on `video_dropouts`), and the forward speed with a mirror (the model is ~1.6x faster
 than what we measured with the mirror clip). See [docs/how-it-works.md](docs/how-it-works.md).
 
