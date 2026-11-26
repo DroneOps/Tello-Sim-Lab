@@ -6,3 +6,6 @@ build/
 dist/
 *.mp4
 recordings/
+
+# python -m tellosim.batch output
+tellosim_batch/

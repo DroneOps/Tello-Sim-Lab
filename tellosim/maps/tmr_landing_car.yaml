@@ -1,0 +1,23 @@
+name: tmr_landing_car
+description: >
+  Like tmr_landing, but the ArUco (10 cm DICT_6X6_100, id 0) is on a RAISED platform that moves
+  like a small car driven "forward 3 s, stop 1 s, back 3 s, stop 1 s" (the TMR_Landing team's
+  ida_y_vuelta.py). Being raised, the ToF reads the distance to the car top when the drone is over
+  it and to the floor beside it, and the drone can hit its side. Height, size and speed are an
+  APPROXIMATION: measure your car and change them. Mirror camera.
+floor: {type: lab_grid}
+start: {position: [0, 0], yaw_deg: 0}
+camera: {mode: mirror}
+# The real TMR will have fog or smoke. Uncomment (or run with --fog 300):
+# fog: {visibility_cm: 300, patches: 0.5}
+objects:
+  - type: landing_pad
+    name: car
+    position: [0, -50]
+    size_cm: 40
+    height_cm: 12
+    color: white
+    border_color: red
+    marker: {dictionary: DICT_6X6_100, id: 0, size_cm: 10}
+    # 3 s at 15 cm/s = 45 cm each way, 1 s stopped at each end, from 10 s after the start.
+    motion: {direction_deg: 90, distance_cm: 45, speed_cm_s: 15, start_s: 10, pause_s: 1}

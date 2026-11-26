@@ -79,7 +79,7 @@ cd ../My_Project
 python -m tellosim.run --world tmr_landing --viewer main.py
 ```
 
-- **`--world`:** the map, e.g. `tmr_gates`, `tmr_landing`, `line_follower`, or your own `.yaml`
+- **`--world`:** the map, e.g. `tmr_gates`, `tmr_landing`, `tmr_landing_car`, `line_follower`, or your own `.yaml`
   ([docs/maps.md](docs/maps.md)).
 - **`--viewer`:** a second window with the map from above.
 - **After your program's name:** its own arguments, e.g. `main.py --solo-seguimiento`.
@@ -218,7 +218,8 @@ Results in the simulator and how to move them to the real drone:
 |---|---|
 | run my existing djitellopy program, without changing it | [docs/your-code.md](docs/your-code.md) |
 | build my own track (lines, markers, gates, boxes, walls, my floor) | [docs/maps.md](docs/maps.md) |
-| a platform that moves, fog or smoke | [docs/maps.md](docs/maps.md#moving-objects), [fog](docs/maps.md#fog-and-smoke) |
+| a platform that moves (also a raised car that stops at each end), fog or smoke | [docs/maps.md](docs/maps.md#moving-objects), [fog](docs/maps.md#fog-and-smoke) |
+| run my program many times and get a table of results | `python -m tellosim.batch` ([docs/your-code.md](docs/your-code.md#several-runs-at-once)) |
 | check that my map is right (textures, collisions, sizes) | `python tools/check_maps.py my_track.yaml` ([docs/maps.md](docs/maps.md#check-your-map)) |
 | use another Tello's calibration, the forward camera or a mirror | [docs/camera.md](docs/camera.md) |
 | make the simulated drone behave like MY drone | [docs/drone-model.md](docs/drone-model.md) |

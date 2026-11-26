@@ -37,13 +37,20 @@ python -m tellosim.run --world tmr_gates my_program.py
 | `--headless` | no windows: `cv2.imshow` does nothing, `cv2.waitKey` returns -1 |
 | `--keys t@4,l@40` | press keys for your program: `cv2.waitKey` returns `t` at 4 s and `l` at 40 s |
 | `--seconds N` | stop the program after N s, as if you pressed Ctrl+C |
+| `--report-json FILE` | also write what really happened (the end-of-run lines below) to FILE, as JSON |
 
 **Keyboard programs:**
 - **Without `--headless`,** your OpenCV windows appear and your keys work as always (click the
   window first).
-- **With `--keys`,** a program that waits for `t` to take off runs alone, and the same command
-  gives the same flight every time. Only for keys read with `cv2.waitKey` / `cv2.pollKey`;
-  programs that read the keyboard another way (pygame, `keyboard`, Qt) need you at the keys.
+- **With `--keys`,** a program that waits for `t` to take off runs alone, also with
+  `--headless`. Only for keys read with `cv2.waitKey` / `cv2.pollKey`; programs that read the
+  keyboard another way (pygame, `keyboard`, Qt) need you at the keys.
+- **The same command does NOT give exactly the same flight twice.** The seed fixes the
+  simulator's randomness (drift, noise...), but your program runs in real time next to it: how
+  many frames it processes and when its commands arrive change a little from run to run, and a
+  landing can go from 12 cm to 40 cm with the same seed. Judge a change with many runs
+  ([several runs at once](#several-runs-at-once)), not with one. For exactly repeatable flights,
+  drive the simulator in simulated time from Python ([extending.md](extending.md)).
 
 **At the end it says what really happened,** which the real drone never tells you:
 
@@ -59,6 +66,32 @@ The gate lines appear on maps with gates, the line distance on maps with floor l
 landing on maps with pads (where the pad was when the drone touched down, if it moves).
 Positions are in cm from the start: x to the east (right at the start), y to the north (ahead
 at the start). See [maps.md](maps.md#coordinates).
+
+## Several runs at once
+
+`python -m tellosim.batch` runs your program once per seed, several at the same time, each one
+with `--headless --report-json`, and sums up what really happened:
+
+```bash
+python -m tellosim.batch --seeds 1-6 --jobs 3 --world tmr_landing --keys t@5 --seconds 120 main.py
+```
+
+```text
+ seed  time s  touchdown              gates  crash
+    1      20  25 cm (on the pad)     -      none
+    2      20  14 cm (on the pad)     -      none
+...
+6 runs: 6 touched down on the pad, 6 touched down, 0 crashed, 0 errors; distance to the pad center: median 15 cm, max 25 cm
+```
+
+- `--seeds 1-8` or `--seeds 1,3,7`, `--jobs N` (default: half the CPUs), `--out DIR` (default
+  `tellosim_batch/`: one log and one JSON per seed, and `summary.json`).
+- Everything else goes to `tellosim.run` as it is: map, model, fog, keys, the program and its
+  arguments. `--viewer` and `--record` are left out (no windows in a batch).
+- Each run uses a full CPU core or more: with too many `--jobs` the video comes slower than on
+  the real drone and the results get worse. Keep `--jobs` at half your cores or less.
+- If your program saves its own logs or videos, all the runs write them to the same place:
+  point them somewhere else with your program's own options.
 
 ## What we saw with the group's projects (Nov 2026)
 
@@ -151,6 +184,14 @@ python -m tellosim.run --world tmr_landing --keys t@4,l@60 --seconds 70 --fog '{
   - aim at the point below the drone (`tellolab.point_below_drone`, or
     `tellolab.vision.floor_point_from_pixel`).
 - `main.py` never takes off: its keyboard part is left out ("omitted for brevity").
+- **Later version** (`main.py` of branch `feat/mision-completa` in
+  [Fernandox89/TMR_Landing](https://github.com/Fernandox89/TMR_Landing)): full mission with a
+  state machine, height hold on the ToF, a Kalman filter that also estimates the platform speed,
+  and waiting for a gap between turnarounds before the blind final descent. With
+  `python -m tellosim.batch --seeds 1-6 --world ... --keys t@5 --seconds 120 main.py`:
+  - `tmr_landing`: 6 of 6 touched down on the pad, median 15 cm from its center, max 25 cm;
+  - `tmr_landing_car` (raised car, 3 s runs with 1 s stops): 4 of 6 on the pad, one hit the
+    side of the car. Its final descent takes ~5 s, longer than the 4 s between turnarounds.
 
 **[Line_Follower](https://github.com/DroneOps/Line_Follower)** was not run here: its window uses
 PySide6 and pyvisual. Every Tello call it makes is in `tellosim.Tello`, so it should run after

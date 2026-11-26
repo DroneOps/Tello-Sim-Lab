@@ -312,3 +312,28 @@ def test_builtin_maps_pass_the_checks():
     for name in tellosim.builtin_maps():
         rep = cm.check_map(name, None)
         assert rep.fails == 0, "\n".join([name] + rep.lines)
+
+
+def test_motion_without_pause_is_the_same_triangle_wave():
+    """pause_s=0 (the default) gives exactly the motion maps had before pause_s existed."""
+    from tellosim.objects import Motion
+    m = Motion(direction_deg=90, distance_cm=200, speed_cm_s=10, start_s=10)
+    L = 200.0
+    for t in np.arange(0, 120, 0.37):
+        s = max(0.0, t - 10) * 10
+        phase = (s + L / 2) % (2 * L)
+        old = (phase - L / 2) if phase < L else (1.5 * L - phase)
+        assert abs(m.offset(t)[0] - (old if t > 10 else 0.0)) < 1e-6
+
+
+def test_motion_pauses_at_each_end():
+    from tellosim.objects import Motion
+    # 45 cm at 15 cm/s = 3 s per run, 1 s stopped at each end, starting at the center going east
+    m = Motion(direction_deg=90, distance_cm=45, speed_cm_s=15, start_s=0, pause_s=1)
+    assert abs(m.offset(1.5)[0] - 22.5) < 1e-6          # reached the east end after half a run
+    assert abs(m.offset(2.0)[0] - 22.5) < 1e-6 and m.velocity(2.0)[0] == 0   # waiting there
+    assert m.velocity(2.6)[0] < 0                          # going back west after the pause
+    assert abs(m.offset(5.5)[0] + 22.5) < 1e-6           # west end: 1.5 + 1 + 3 s
+    assert m.velocity(6.0)[0] == 0 and m.velocity(6.6)[0] > 0
+    xs = [m.offset(t)[0] for t in np.arange(0, 40, 0.05)]
+    assert abs(max(xs) - 22.5) < 1e-6 and abs(min(xs) + 22.5) < 1e-6

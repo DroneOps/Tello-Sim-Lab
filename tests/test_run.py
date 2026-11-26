@@ -42,3 +42,41 @@ def test_run_options_from_a_json_file(tmp_path):
     out = subprocess.run([sys.executable, "-m", "tellosim.run", "--headless", "--fog", str(tmp_path / "fog.json"), str(prog)],
                          capture_output=True, text=True, timeout=60).stdout
     assert "FOG 300 0.5" in out
+
+
+def test_run_report_json(tmp_path):
+    """--report-json writes the end-of-run results as data, the same ones that are printed."""
+    import json
+    prog = tmp_path / "prog.py"
+    prog.write_text("from djitellopy import Tello\nt = Tello()\nt.connect()\nt.end()\n")
+    report = tmp_path / "r.json"
+    out = subprocess.run([sys.executable, "-m", "tellosim.run", "--headless", "--world", "tmr_landing", "--seed", "3",
+                          "--report-json", str(report), str(prog)], capture_output=True, text=True, timeout=60).stdout
+    assert "crash: none" in out
+    r = json.loads(report.read_text())
+    assert r["world"] == "tmr_landing" and r["seed"] == 3
+    assert r["drones"][0]["crash"] is None and r["drones"][0]["landings"] == []
+
+
+def test_batch_helpers():
+    from tellosim.batch import aggregate, parse_seeds, row
+    assert parse_seeds("1-3,7") == [1, 2, 3, 7]
+    run = {"seed": 4, "drones": [{"flight_time_s": 30, "crash": None, "gates": [],
+                                  "landings": [{"pad": "pad", "distance_cm": 8.0, "on_pad": True, "t_s": 40}]}]}
+    rows = [row(run), row({"seed": 5, "drones": [{"flight_time_s": 9, "crash": "wall", "gates": [], "landings": []}]}),
+            row({"seed": 6, "error": "no report"})]
+    total = aggregate(rows)
+    assert total == {"runs": 3, "errors": 1, "crashes": 1, "landed": 1, "on_pad": 1,
+                     "distance_cm_median": 8.0, "distance_cm_max": 8.0}
+
+
+def test_batch_runs_every_seed(tmp_path):
+    import json
+    prog = tmp_path / "prog.py"
+    prog.write_text("from djitellopy import Tello\nt = Tello()\nt.connect()\nt.end()\n")
+    out = subprocess.run([sys.executable, "-m", "tellosim.batch", "--seeds", "1-2", "--jobs", "2",
+                          "--out", str(tmp_path / "b"), "--world", "tmr_landing", str(prog)],
+                         capture_output=True, text=True, timeout=120).stdout
+    assert "2 runs" in out
+    s = json.loads((tmp_path / "b" / "summary.json").read_text())
+    assert [r["seed"] for r in s["runs"]] == [1, 2] and s["total"]["errors"] == 0

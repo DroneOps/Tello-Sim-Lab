@@ -71,23 +71,34 @@ class Motion:
     facing north). distance_cm: length of the run, centered on the object's position.
     back_and_forth: true = it turns around at each end, forever; false = it goes once from the
     position, distance_cm along direction_deg, and stops. start_s: seconds after the simulation
-    starts before it begins to move."""
+    starts before it begins to move. pause_s: back_and_forth only, seconds it stays still at each
+    end before turning around (like a car driven "forward N s, stop, back N s, stop")."""
     direction_deg: float = 90.0
     distance_cm: float = 200.0
     speed_cm_s: float = 10.0
     back_and_forth: bool = True
     start_s: float = 0.0
+    pause_s: float = 0.0
 
     def _travel(self, t: float) -> tuple[float, float]:
         """(signed position along the line, signed speed) at time t."""
-        L, v = float(self.distance_cm), float(self.speed_cm_s)
+        L, v, p = float(self.distance_cm), abs(float(self.speed_cm_s)), max(0.0, float(self.pause_s))
         if L <= 0 or v == 0 or t <= self.start_s:
             return 0.0, 0.0
-        s = (t - self.start_s) * abs(v)
         if not self.back_and_forth:
-            return (min(s, L), abs(v) if s < L else 0.0)
-        phase = (s + L / 2) % (2 * L)  # triangle wave: starts at the center going forward
-        return (phase - L / 2, abs(v)) if phase < L else (1.5 * L - phase, -abs(v))
+            s = (t - self.start_s) * v
+            return (min(s, L), v if s < L else 0.0)
+        # Starts at the center going forward: as if it had left the back end half a run ago.
+        # One cycle: run forward, pause at the front end, run back, pause at the back end.
+        leg = L / v
+        phase = (t - self.start_s + leg / 2) % (2 * (leg + p))
+        if phase < leg:
+            return -L / 2 + v * phase, v
+        if phase < leg + p:
+            return L / 2, 0.0
+        if phase < 2 * leg + p:
+            return L / 2 - v * (phase - leg - p), -v
+        return -L / 2, 0.0
 
     def offset(self, t: float) -> np.ndarray:
         d, _ = self._travel(t)

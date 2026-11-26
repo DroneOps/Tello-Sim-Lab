@@ -42,25 +42,51 @@ def line_distance(world, path):
     return float(np.median(d)), float(max(d))
 
 
-def summary(sim, path) -> list[str]:
+def results(sim, path) -> dict:
+    """What really happened, as plain data (for --report-json and for batches of runs).
+
+    Keys: flight_time_s, battery, crash (None if none), path_cm, end (x, y, z, yaw), highest_cm,
+    gates [{name, through}], line_distance_cm {median, max} or None, and landings
+    [{pad, distance_cm, on_pad, t_s}] if the drone touched down on a map with landing pads."""
     d = sim.drone
-    lines = [f"flight time {d.flight_time:.0f} s, battery {d.bat:.0f}%, crash: {d.crash or 'none'}"]
+    out = {"flight_time_s": round(float(d.flight_time), 2), "battery": round(float(d.bat), 1),
+           "crash": d.crash or None, "path_cm": None, "end": None, "highest_cm": None,
+           "gates": [], "line_distance_cm": None, "landings": []}
     if path:
-        length = sum(math.dist(a[:2], b[:2]) for a, b in zip(path, path[1:]))
         x, y, z, yaw = sim.pose()
-        lines.append(f"flew {length:.0f} cm; ended at x={x:.0f} y={y:.0f} z={z:.0f} cm, yaw {yaw:.0f}; "
-                     f"highest {max(p[2] for p in path):.0f} cm")
-    for name, ok in gates_crossed(sim.world, path):
-        lines.append(f"gate {name}: {'flown through' if ok else 'NOT flown through'}")
+        out["path_cm"] = round(sum(math.dist(a[:2], b[:2]) for a, b in zip(path, path[1:])), 1)
+        out["end"] = {"x": round(float(x), 1), "y": round(float(y), 1), "z": round(float(z), 1),
+                      "yaw": round(float(yaw), 1)}
+        out["highest_cm"] = round(float(max(p[2] for p in path)), 1)
+    out["gates"] = [{"name": name, "through": ok} for name, ok in gates_crossed(sim.world, path)]
     ld = line_distance(sim.world, [p for p in path if p[2] > 20])
     if ld:
-        lines.append(f"distance to the line: median {ld[0]:.0f} cm, max {ld[1]:.0f} cm")
+        out["line_distance_cm"] = {"median": round(ld[0], 1), "max": round(ld[1], 1)}
     if d.mode == "ground" and d.flight_time > 0 and d.touchdown:
         t, tx, ty = d.touchdown  # where the pad was when the drone touched down
         for pad in [o for o in sim.world.objects if isinstance(o, LandingPad)]:
             ox, oy = sim.world.offset(pad, t)
             x, y = tx - ox, ty - oy
-            dist = math.hypot(x - pad.position[0], y - pad.position[1])
-            lines.append(f"landing pad {pad.name or ''}: touched down {dist:.0f} cm from its center"
-                         f" ({'on it' if pad.supports(x, y) else 'off it'}), at {t:.0f} s".replace("pad :", "pad:"))
+            out["landings"].append({"pad": pad.name or "", "t_s": round(float(t), 2),
+                                    "distance_cm": round(math.hypot(x - pad.position[0], y - pad.position[1]), 1),
+                                    "on_pad": bool(pad.supports(x, y))})
+    return out
+
+
+def summary(sim, path) -> list[str]:
+    """The same results as text lines (what tellosim.run prints at the end)."""
+    r = results(sim, path)
+    lines = [f"flight time {r['flight_time_s']:.0f} s, battery {r['battery']:.0f}%, crash: {r['crash'] or 'none'}"]
+    if r["end"]:
+        e = r["end"]
+        lines.append(f"flew {r['path_cm']:.0f} cm; ended at x={e['x']:.0f} y={e['y']:.0f} z={e['z']:.0f} cm, "
+                     f"yaw {e['yaw']:.0f}; highest {r['highest_cm']:.0f} cm")
+    for g in r["gates"]:
+        lines.append(f"gate {g['name']}: {'flown through' if g['through'] else 'NOT flown through'}")
+    if r["line_distance_cm"]:
+        ld = r["line_distance_cm"]
+        lines.append(f"distance to the line: median {ld['median']:.0f} cm, max {ld['max']:.0f} cm")
+    for ln in r["landings"]:
+        lines.append(f"landing pad {ln['pad']}: touched down {ln['distance_cm']:.0f} cm from its center"
+                     f" ({'on it' if ln['on_pad'] else 'off it'}), at {ln['t_s']:.0f} s".replace("pad :", "pad:"))
     return lines

@@ -87,8 +87,8 @@ def run_footprint(o) -> list[tuple[float, float]]:
     if not o.motion:
         return pts
     m = o.motion
-    ends = [m.offset(m.start_s + k * m.distance_cm / max(abs(m.speed_cm_s), 1e-6) / 2) for k in (1, 3)] \
-        if m.back_and_forth else [np.zeros(2), m.offset(m.start_s + m.distance_cm / max(abs(m.speed_cm_s), 1e-6))]
+    d = compass(m.direction_deg)[:2]
+    ends = [-m.distance_cm / 2 * d, m.distance_cm / 2 * d] if m.back_and_forth else [np.zeros(2), m.distance_cm * d]
     return [(x + e[0], y + e[1]) for e in ends for (x, y) in pts]
 
 
@@ -293,12 +293,20 @@ def check_motion(world, rep: Report) -> None:
         ts = np.arange(m.start_s + 0.05, m.start_s + 60, 0.1)
         pos = np.array([m.offset(t) for t in ts])
         speed = np.linalg.norm(np.diff(pos, axis=0), axis=1) / 0.1
-        steady = np.abs(speed - abs(m.speed_cm_s)) < 0.05 * abs(m.speed_cm_s) + 0.5
+        moving = speed > 0.5
+        steady = np.abs(speed[moving] - abs(m.speed_cm_s)) < 0.05 * abs(m.speed_cm_s) + 0.5
         reach = np.ptp(pos @ compass(m.direction_deg)[:2])
-        rep.check(steady.mean() > 0.9 and abs(reach - m.distance_cm) < 1.0,
-                  f"{label(o)}: moves towards {m.direction_deg:g}° at {np.median(speed):.1f} cm/s "
+        pause = m.pause_s if m.back_and_forth else 0.0
+        if m.back_and_forth:  # share of the time it should be moving (the rest it waits at the ends)
+            leg = m.distance_cm / max(abs(m.speed_cm_s), 1e-6)
+            moving_ok = abs(moving.mean() - leg / (leg + pause)) < 0.05
+        else:
+            moving_ok = True
+        rep.check(moving.any() and steady.mean() > 0.9 and moving_ok and abs(reach - m.distance_cm) < 1.0,
+                  f"{label(o)}: moves towards {m.direction_deg:g}° at {np.median(speed[moving]) if moving.any() else 0:.1f} cm/s "
                   f"(asked {abs(m.speed_cm_s):g}), a run of {reach:.0f} cm (asked {m.distance_cm:g})"
-                  + (", back and forth" if m.back_and_forth else ", once"))
+                  + (", back and forth" if m.back_and_forth else ", once")
+                  + (f", stopping {pause:g} s at each end" if pause else ""))
 
 
 def check_fog(world, rep: Report) -> None:

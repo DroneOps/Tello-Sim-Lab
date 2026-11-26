@@ -14,10 +14,12 @@ Options:
   --camera-set mirror_axis=h                          any camera field (docs/camera.md); repeat it
   --faults '{"takeoff": "no_ok"}'                     faults as JSON, or a .json file (docs/faults.md)
   --fog 300  or  --fog '{"visibility_cm": 300, "patches": 0.6}'   fog or smoke, or a .json file (docs/maps.md)
-  --headless       no windows: cv2.imshow does nothing and cv2.waitKey returns -1 (no keys)
+  --headless       no windows: cv2.imshow does nothing and cv2.waitKey returns -1 (no keys,
+                   except the ones given with --keys)
   --viewer         also show the map from above
   --record FILE    record the map + camera view to an mp4
   --seconds N      stop the program after N seconds (as if you pressed Ctrl+C)
+  --report-json F  also write the end-of-run results to F as JSON (for scripts and batches)
   --keys t@4,q@40  press keys for the program: cv2.waitKey returns 't' at 4 s, 'q' at 40 s
                    (for programs that take off or land from the keyboard)
 """
@@ -34,7 +36,7 @@ import time
 import types
 
 import tellosim
-from .report import summary
+from .report import results, summary
 
 INSTANCES: list = []
 
@@ -101,6 +103,17 @@ def _press_keys(keys: list[tuple[str, float]]) -> None:
     cv2.waitKey, cv2.pollKey = wait_key, poll_key
 
 
+def _write_report(a, runs: list[dict]) -> None:
+    """--report-json: the run's settings and, for each simulated Tello, what really happened."""
+    report = {"script": a.script, "script_args": a.script_args, "world": a.world, "model": a.model,
+              "seed": a.seed, "fog": a.fog, "faults": a.faults, "drones": runs}
+    try:
+        with open(a.report_json, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+    except OSError as e:
+        print(f"[tellosim.run] could not write {a.report_json}: {e}", flush=True)
+
+
 def _json_arg(text: str):
     """--fog / --faults: JSON text, a number, or the path of a .json file (handy on Windows, where
     quotes inside a command are hard to get right)."""
@@ -132,6 +145,7 @@ def main() -> None:
     ap.add_argument("--viewer", action="store_true")
     ap.add_argument("--record", default=None)
     ap.add_argument("--seconds", type=float, default=None)
+    ap.add_argument("--report-json", default=None, metavar="FILE")
     ap.add_argument("script")
     ap.add_argument("script_args", nargs=argparse.REMAINDER)
     a = ap.parse_args()
@@ -171,6 +185,8 @@ def main() -> None:
     finally:
         for t in INSTANCES:
             print("[tellosim.run] " + "\n[tellosim.run] ".join(summary(t.sim, t._path)), flush=True)
+        if a.report_json:
+            _write_report(a, [results(t.sim, t._path) for t in INSTANCES])
             try:
                 t.sim.close()
             except Exception:

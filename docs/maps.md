@@ -138,6 +138,7 @@ Any object except a line can move at constant speed along a straight line, with 
 | `speed_cm_s` | 10 | constant speed |
 | `back_and_forth` | true | true: it turns around at each end, forever. false: it goes once from `position`, `distance_cm` along `direction_deg`, and stops |
 | `start_s` | 0 | seconds after the start before it moves (time to take off and find it) |
+| `pause_s` | 0 | back and forth only: seconds it stays still at each end before turning around, like a car driven "forward 3 s, stop 1 s, back 3 s, stop 1 s" |
 
 - **The camera sees it where it is** (also through the ~170 ms video delay), and the viewer
   draws it moving.
@@ -146,6 +147,10 @@ Any object except a line can move at constant speed along a straight line, with 
 - **The report of `tellosim.run`** says how far from the pad's center the drone touched down,
   measured where the pad was at that moment.
 - A line is painted on the floor texture and cannot move: use a pad or a panel.
+- **A car instead of a flat pad:** give the pad `height_cm` (the ToF then reads the car top
+  when the drone is over it, the floor beside it, and its side can be hit) and `pause_s`. The
+  built-in `tmr_landing_car` map is an example; measure your car's height, size, speed and
+  times, and change them.
 - In Python: `LandingPad(..., motion={"direction_deg": 90, "speed_cm_s": 10})`, and
   `world.offset(obj, t)` says where it is at `t` seconds.
 
